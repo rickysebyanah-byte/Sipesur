@@ -1,0 +1,1845 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import db from './db.js';
+import { buatPdf, buatPdfSuratDinas } from './pdf.js';
+
+const SECRET = process.env.JWT_SECRET || 'sipesur-jwt-secret-key-32-chars-long';
+if (process.env.VERCEL && !process.env.JWT_SECRET) {
+  console.warn('[SIPESUR] JWT_SECRET belum diisi di Environment Variables Vercel.');
+}
+
+// URL publik aplikasi: dipakai untuk tautan QR pada surat.
+// Urutan: CLIENT_URL -> domain produksi Vercel -> localhost.
+const CLIENT =
+  process.env.CLIENT_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '') ||
+  'http://localhost:5173';
+
+// Di Vercel, satu-satunya folder yang bisa ditulis adalah /tmp (sementara, hilang saat instance berganti).
+const DATA_DIR = process.env.VERCEL ? '/tmp/sipesur' : process.cwd();
+
+const app = express();
+const q = async (s, p = []) => (await db.query(s, p))[0];
+const fail = (s, m) => Object.assign(new Error(m), { status: s });
+const ah = (f) => (a, b, n) => f(a, b, n).catch(n);
+const ROM = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+// Helper untuk sensor / masking data NIK dan No KK
+const maskId = (str) => {
+  if (!str || str.length < 16) return str || '-';
+  return str.slice(0, 6) + '******' + str.slice(12);
+};
+
+const log = (req, aksi, detail = '') =>
+  q('INSERT INTO activity_logs(user_id,aksi,detail,ip) VALUES(?,?,?,?)', [
+    req.user?.id || null,
+    aksi,
+    String(detail).slice(0, 250),
+    req.ip,
+  ]);
+
+const notif = (uid, pesan) =>
+  q('INSERT INTO notifikasi(user_id,pesan) VALUES(?,?)', [uid, pesan]);
+
+const notifRole = (r, pesan) =>
+  q('INSERT INTO notifikasi(user_id,pesan) SELECT id,? FROM users WHERE role=? AND aktif=1', [pesan, r]);
+
+// Middleware Keamanan & CORS
+app.use(
+  helmet({ crossOriginResourcePolicy: false }),
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        origin === CLIENT ||
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:')
+      ) {
+        return callback(null, true);
+      }
+      callback(null, true);
+    },
+    credentials: true,
+  }),
+  express.json({ limit: '100kb' }),
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 600 })
+);
+
+const loginLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  message: { message: 'Terlalu banyak percobaan, coba lagi nanti dalam 15 menit' },
+});
+
+const registerLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  message: { message: 'Terlalu banyak pendaftaran dari perangkat ini, coba lagi nanti' },
+});
+
+const auth = (req, res, next) => {
+  try {
+    req.user = jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), SECRET);
+    next();
+  } catch {
+    res.status(401).json({ message: 'Sesi berakhir, silakan login kembali' });
+  }
+};
+
+const role = (...r) => (req, res, next) =>
+  r.includes(req.user.role) ? next() : res.status(403).json({ message: 'Akses ditolak' });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (r, f, cb) => {
+      const dir = path.join(DATA_DIR, 'uploads');
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (r, f, cb) => cb(null, crypto.randomUUID() + path.extname(f.originalname).toLowerCase()),
+  }),
+  limits: { fileSize: 2 * 1024 * 1024, files: 12 },
+  fileFilter: (r, f, cb) =>
+    ['application/pdf', 'image/jpeg', 'image/png'].includes(f.mimetype) &&
+      /\.(pdf|jpe?g|png)$/i.test(f.originalname)
+      ? cb(null, true)
+      : cb(fail(400, 'File harus PDF/JPG/PNG maksimal 2 MB')),
+});
+
+const getP = async (id, user) => {
+  const [p] = await q(
+    'SELECT p.*, j.nama AS jenis, j.kode AS jkode, j.form_fields, j.template, u.nama AS pemohon, w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon FROM pengajuan p JOIN jenis_surat j ON j.id=p.jenis_surat_id JOIN users u ON u.id=p.user_id LEFT JOIN warga w ON w.user_id=p.user_id WHERE p.id=?',
+    [id]
+  );
+  if (!p) throw fail(404, 'Pengajuan tidak ditemukan');
+  if (user.role === 'warga' && p.user_id !== user.id) throw fail(403, 'Akses ditolak');
+  if (typeof p.data_form === 'string') {
+    try { p.data_form = JSON.parse(p.data_form); } catch { }
+  }
+  if (typeof p.form_fields === 'string') {
+    try { p.form_fields = JSON.parse(p.form_fields); } catch { }
+  }
+  return p;
+};
+
+const move = async (id, from, to, catatan) => {
+  const [r] = await db.query(
+    'UPDATE pengajuan SET status=?, catatan=? WHERE id=? AND status IN (?)',
+    [to, catatan || null, id, from]
+  );
+  if (!r.affectedRows) throw fail(409, 'Status pengajuan tidak sesuai untuk aksi ini');
+};
+
+async function saveDocs(files, pid, jid) {
+  const syar = await q('SELECT id FROM persyaratan WHERE jenis_surat_id=?', [jid]);
+  for (const f of files) {
+    const s = syar.find((x) => 'doc_' + x.id === f.fieldname);
+    if (!s) {
+      fs.unlink(f.path, () => { });
+      continue;
+    }
+    const oldDocs = await q('SELECT path FROM dokumen WHERE pengajuan_id=? AND persyaratan_id=?', [pid, s.id]);
+    oldDocs.forEach((o) => fs.unlink(o.path, () => { }));
+    await q('DELETE FROM dokumen WHERE pengajuan_id=? AND persyaratan_id=?', [pid, s.id]);
+    await q(
+      'INSERT INTO dokumen(pengajuan_id,persyaratan_id,nama_file,path,mime) VALUES(?,?,?,?,?)',
+      [pid, s.id, f.originalname, f.path, f.mimetype]
+    );
+  }
+}
+
+const lengkap = async (pid, jid) => {
+  const [c] = await q(
+    'SELECT (SELECT COUNT(*)::int FROM persyaratan WHERE jenis_surat_id=?) AS a, (SELECT COUNT(*)::int FROM dokumen WHERE pengajuan_id=?) AS b',
+    [jid, pid]
+  );
+  return parseInt(c?.a || 0, 10) === parseInt(c?.b || 0, 10);
+};
+
+/* ====================================================================
+   1. FITUR AUTENTIKASI & REGISTRASI WARGA
+   ==================================================================== */
+
+/**
+ * Pendaftaran Akun Warga Mandiri
+ * Data: NIK (16 digit), No KK (16 digit), Nama, Tempat/Tgl Lahir, Jenis Kelamin,
+ * Alamat lengkap, No HP/WA, Email (opsional), Password, Konfirmasi Password, Persetujuan Syarat.
+ */
+app.post(
+  '/api/auth/register',
+  registerLimit,
+  ah(async (req, res) => {
+    const {
+      nik,
+      no_kk,
+      nama,
+      tempat_lahir,
+      tanggal_lahir,
+      jenis_kelamin,
+      alamat,
+      pekerjaan,
+      telepon,
+      email,
+      password,
+      konfirmasi_password,
+      setuju_syarat,
+    } = req.body;
+
+    // 1. Validasi Syarat & Ketentuan
+    if (!setuju_syarat) {
+      throw fail(400, 'Anda wajib menyetujui syarat dan ketentuan layanan SIPESUR.');
+    }
+
+    // 2. Validasi NIK & No KK (Tepat 16 digit angka)
+    const cleanNik = String(nik || '').trim();
+    const cleanKk = String(no_kk || '').trim();
+    if (!/^\d{16}$/.test(cleanNik)) {
+      throw fail(400, 'NIK harus tepat 16 digit angka.');
+    }
+    if (!/^\d{16}$/.test(cleanKk)) {
+      throw fail(400, 'Nomor Kartu Keluarga (KK) harus tepat 16 digit angka.');
+    }
+
+    // 3. Validasi Nama & Data Diri Wajib
+    if (!nama || nama.trim().length < 3) {
+      throw fail(400, 'Nama lengkap minimal 3 karakter.');
+    }
+    if (!tempat_lahir || !tempat_lahir.trim()) {
+      throw fail(400, 'Tempat lahir wajib diisi.');
+    }
+    if (!tanggal_lahir || !/^\d{4}-\d{2}-\d{2}$/.test(tanggal_lahir)) {
+      throw fail(400, 'Tanggal lahir wajib diisi dengan format yang benar.');
+    }
+    if (!['L', 'P'].includes(jenis_kelamin)) {
+      throw fail(400, 'Jenis kelamin harus L (Laki-laki) atau P (Perempuan).');
+    }
+    if (!alamat || alamat.trim().length < 5) {
+      throw fail(400, 'Alamat lengkap wajib diisi (minimal 5 karakter).');
+    }
+    if (!telepon || telepon.trim().length < 9) {
+      throw fail(400, 'Nomor HP/WhatsApp wajib diisi minimal 9 digit.');
+    }
+
+    // 4. Validasi Email (Opsional, tapi jika diisi format harus valid)
+    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+    if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      throw fail(400, 'Format email tidak valid.');
+    }
+
+    // 5. Validasi Standar Keamanan Password
+    const pw = String(password || '');
+    if (pw.length < 8) {
+      throw fail(400, 'Password minimal 8 karakter.');
+    }
+    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+      throw fail(400, 'Password harus mengombinasikan huruf dan angka.');
+    }
+    if (pw !== konfirmasi_password) {
+      throw fail(400, 'Konfirmasi password tidak sama dengan password.');
+    }
+
+    // 6. Cek Keunikan NIK di database
+    const [existingNik] = await q('SELECT id FROM warga WHERE nik=?', [cleanNik]);
+    if (existingNik) {
+      throw fail(409, 'NIK sudah terdaftar dalam sistem SIPESUR.');
+    }
+
+    // 7. Cek Keunikan Email jika diisi
+    if (cleanEmail) {
+      const [existingEmail] = await q('SELECT id FROM users WHERE email=?', [cleanEmail]);
+      if (existingEmail) {
+        throw fail(409, 'Email sudah terdaftar dalam sistem.');
+      }
+    }
+
+    // 8. Hash Password & Simpan Akun dengan status 'menunggu_verifikasi'
+    const passwordHash = await bcrypt.hash(pw, 10);
+    const [userRes] = await db.query(
+      'INSERT INTO users(nama,email,username,password,role,status_verifikasi,aktif) VALUES(?,?,?,?,?,?,?)',
+      [
+        nama.trim(),
+        cleanEmail || null,
+        cleanNik, // Username default warga adalah NIK
+        passwordHash,
+        'warga',
+        'menunggu_verifikasi',
+        1,
+      ]
+    );
+
+    await q(
+      'INSERT INTO warga(user_id,nik,no_kk,tempat_lahir,tanggal_lahir,jenis_kelamin,alamat,pekerjaan,telepon) VALUES(?,?,?,?,?,?,?,?,?)',
+      [
+        userRes.insertId,
+        cleanNik,
+        cleanKk,
+        tempat_lahir.trim(),
+        tanggal_lahir,
+        jenis_kelamin,
+        alamat.trim(),
+        pekerjaan ? pekerjaan.trim() : null,
+        telepon.trim(),
+      ]
+    );
+
+    // Kirim notifikasi ke petugas kelurahan bahwa ada pendaftaran baru
+    await notifRole(
+      'petugas',
+      `Pendaftaran warga baru: ${nama.trim()} (NIK ${maskId(cleanNik)}) menunggu verifikasi data.`
+    );
+
+    req.user = { id: userRes.insertId };
+    await log(req, 'REGISTER_WARGA', `NIK: ${maskId(cleanNik)}, Nama: ${nama.trim()}`);
+
+    res.status(201).json({
+      message:
+        'Pendaftaran berhasil! Akun Anda saat ini berstatus Menunggu Verifikasi oleh petugas kelurahan. Anda dapat login untuk memantau status verifikasi.',
+      status_verifikasi: 'menunggu_verifikasi',
+      nik_masked: maskId(cleanNik),
+    });
+  })
+);
+
+/**
+ * Halaman Login Terpadu
+ * - Warga login menggunakan NIK atau Email + Password.
+ * - Petugas / Lurah login menggunakan NIP, Username, atau Email + Password.
+ * - Admin login menggunakan Username atau Email + Password.
+ */
+app.post(
+  '/api/auth/login',
+  loginLimit,
+  ah(async (req, res) => {
+    const identifier = String(req.body.identifier || req.body.email || '').trim();
+    const password = String(req.body.password || '');
+
+    if (!identifier || !password) {
+      throw fail(400, 'NIK / NIP / Username / Email dan password wajib diisi.');
+    }
+
+    // Cari pengguna berdasarkan identifier (Email / Username / NIP / NIK Warga)
+    const [u] = await q(
+      `SELECT u.*, w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon AS telepon_warga
+       FROM users u
+       LEFT JOIN warga w ON w.user_id = u.id
+       WHERE u.email = ? OR u.username = ? OR u.nip = ? OR w.nik = ?`,
+      [identifier, identifier, identifier, identifier]
+    );
+
+    if (!u || !(await bcrypt.compare(password, u.password))) {
+      throw fail(401, 'Kredensial salah: NIK / NIP / Username / Email atau password tidak cocok.');
+    }
+
+    if (!u.aktif) {
+      throw fail(403, 'Akun Anda telah dinonaktifkan oleh Administrator. Silakan hubungi kantor kelurahan.');
+    }
+
+    // Cek jika akun warga ditolak verifikasinya
+    if (u.role === 'warga' && u.status_verifikasi === 'ditolak') {
+      throw fail(
+        403,
+        `Pendaftaran akun Anda ditolak oleh petugas kelurahan. Catatan: ${u.catatan_verifikasi || 'Data tidak sesuai dokumen kependudukan'
+        }. Silakan hubungi kantor kelurahan.`
+      );
+    }
+
+    req.user = u;
+    await log(req, 'LOGIN');
+
+    const token = jwt.sign(
+      {
+        id: u.id,
+        role: u.role,
+        nama: u.nama,
+        status_verifikasi: u.status_verifikasi,
+        must_change_password: Boolean(u.must_change_password),
+      },
+      SECRET,
+      { expiresIn: '8h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: u.id,
+        nama: u.nama,
+        email: u.email,
+        username: u.username,
+        nip: u.nip,
+        jabatan: u.jabatan,
+        role: u.role,
+        status_verifikasi: u.status_verifikasi,
+        catatan_verifikasi: u.catatan_verifikasi,
+        must_change_password: Boolean(u.must_change_password),
+        nik_masked: u.nik ? maskId(u.nik) : null,
+      },
+      notice:
+        u.role === 'warga' && u.status_verifikasi === 'menunggu_verifikasi'
+          ? 'Akun Anda sedang Menunggu Verifikasi oleh petugas. Layanan pengajuan surat akan aktif setelah akun diverifikasi.'
+          : null,
+    });
+  })
+);
+
+/**
+ * Ganti Password (Wajib untuk Akun Pemerintahan saat login perdana, atau warga mengubah password mandiri)
+ */
+app.post(
+  '/api/auth/ganti-password',
+  auth,
+  ah(async (req, res) => {
+    const { password_lama, password_baru, konfirmasi_password } = req.body;
+    if (!password_lama || !password_baru) {
+      throw fail(400, 'Password lama dan password baru wajib diisi.');
+    }
+    if (password_baru.length < 8 || !/[A-Za-z]/.test(password_baru) || !/\d/.test(password_baru)) {
+      throw fail(400, 'Password baru minimal 8 karakter dan mengombinasikan huruf serta angka.');
+    }
+    if (password_baru !== konfirmasi_password) {
+      throw fail(400, 'Konfirmasi password baru tidak cocok.');
+    }
+
+    const [u] = await q('SELECT password FROM users WHERE id=?', [req.user.id]);
+    if (!u || !(await bcrypt.compare(password_lama, u.password))) {
+      throw fail(400, 'Password saat ini salah.');
+    }
+
+    const newHash = await bcrypt.hash(password_baru, 10);
+    await q('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [newHash, req.user.id]);
+
+    await log(req, 'GANTI_PASSWORD');
+    res.json({ message: 'Password berhasil diubah. Silakan gunakan password baru untuk login berikutnya.' });
+  })
+);
+
+/**
+ * Profil Pengguna Saat Ini
+ */
+app.get(
+  '/api/me',
+  auth,
+  ah(async (req, res) => {
+    const [u] = await q(
+      `SELECT u.id, u.nama, u.email, u.username, u.nip, u.jabatan, u.role, u.status_verifikasi,
+              u.catatan_verifikasi, u.must_change_password, u.aktif,
+              w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon
+       FROM users u
+       LEFT JOIN warga w ON w.user_id = u.id
+       WHERE u.id = ?`,
+      [req.user.id]
+    );
+    if (!u) throw fail(404, 'Pengguna tidak ditemukan');
+
+    res.json({
+      ...u,
+      nik_masked: u.nik ? maskId(u.nik) : null,
+      no_kk_masked: u.no_kk ? maskId(u.no_kk) : null,
+    });
+  })
+);
+
+app.put(
+  '/api/profil',
+  auth,
+  role('warga'),
+  ah(async (req, res) => {
+    const b = req.body;
+    if (!b.nama || b.nama.trim().length < 3) throw fail(400, 'Nama minimal 3 karakter.');
+    await q('UPDATE users SET nama=? WHERE id=?', [b.nama.trim(), req.user.id]);
+    await q(
+      'UPDATE warga SET tempat_lahir=?,tanggal_lahir=?,jenis_kelamin=?,alamat=?,pekerjaan=?,telepon=? WHERE user_id=?',
+      [
+        b.tempat_lahir || null,
+        b.tanggal_lahir || null,
+        ['L', 'P'].includes(b.jenis_kelamin) ? b.jenis_kelamin : null,
+        b.alamat || null,
+        b.pekerjaan || null,
+        b.telepon || null,
+        req.user.id,
+      ]
+    );
+    await log(req, 'UPDATE_PROFIL');
+    res.json({ message: 'Profil berhasil disimpan.' });
+  })
+);
+
+/* ====================================================================
+   2. FITUR VERIFIKASI AKUN WARGA (PETUGAS & ADMIN)
+   ==================================================================== */
+
+app.get(
+  '/api/verifikasi-warga',
+  auth,
+  role('petugas', 'admin'),
+  ah(async (req, res) => {
+    const st = req.query.status || 'menunggu_verifikasi';
+    const where = st === 'all' ? '' : 'WHERE u.status_verifikasi = ?';
+    const params = st === 'all' ? [] : [st];
+
+    const rows = await q(
+      `SELECT u.id, u.nama, u.email, u.status_verifikasi, u.catatan_verifikasi, u.diverifikasi_at, u.created_at,
+              w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon
+       FROM users u
+       JOIN warga w ON w.user_id = u.id
+       ${where}
+       ORDER BY u.id DESC`,
+      params
+    );
+
+    res.json(
+      rows.map((r) => ({
+        ...r,
+        nik_masked: maskId(r.nik),
+        no_kk_masked: maskId(r.no_kk),
+      }))
+    );
+  })
+);
+
+app.get(
+  '/api/verifikasi-warga/:id',
+  auth,
+  role('petugas', 'admin'),
+  ah(async (req, res) => {
+    const [w] = await q(
+      `SELECT u.id, u.nama, u.email, u.status_verifikasi, u.catatan_verifikasi, u.diverifikasi_at, u.created_at,
+              w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon,
+              v.nama AS verifikator
+       FROM users u
+       JOIN warga w ON w.user_id = u.id
+       LEFT JOIN users v ON v.id = u.diverifikasi_oleh
+       WHERE u.id = ?`,
+      [req.params.id]
+    );
+    if (!w) throw fail(404, 'Data warga tidak ditemukan');
+    res.json({
+      ...w,
+      nik_masked: maskId(w.nik),
+      no_kk_masked: maskId(w.no_kk),
+    });
+  })
+);
+
+app.post(
+  '/api/verifikasi-warga/:id',
+  auth,
+  role('petugas', 'admin'),
+  ah(async (req, res) => {
+    const { hasil, catatan } = req.body;
+    if (!['terverifikasi', 'ditolak'].includes(hasil)) {
+      throw fail(400, 'Hasil verifikasi harus "terverifikasi" atau "ditolak".');
+    }
+    if (hasil === 'ditolak' && !(catatan || '').trim()) {
+      throw fail(400, 'Alasan penolakan verifikasi wajib diisi.');
+    }
+
+    const [u] = await q("SELECT id, nama, role FROM users WHERE id=? AND role='warga'", [req.params.id]);
+    if (!u) throw fail(404, 'Akun warga tidak ditemukan.');
+
+    await q(
+      'UPDATE users SET status_verifikasi=?, catatan_verifikasi=?, diverifikasi_oleh=?, diverifikasi_at=CURRENT_TIMESTAMP WHERE id=?',
+      [hasil, catatan || null, req.user.id, u.id]
+    );
+
+    const pesan =
+      hasil === 'terverifikasi'
+        ? 'Selamat! Akun kependudukan Anda telah diverifikasi oleh petugas kelurahan. Anda sekarang dapat mengakses layanan pengajuan surat resmi.'
+        : `Verifikasi akun Anda ditolak oleh petugas kelurahan. Alasan: ${catatan}. Silakan hubungi kantor kelurahan.`;
+
+    await notif(u.id, pesan);
+    await log(req, 'VERIFIKASI_WARGA_' + hasil.toUpperCase(), `User ID: ${u.id}, Nama: ${u.nama}`);
+
+    res.json({ message: `Akun warga berhasil ${hasil === 'terverifikasi' ? 'diverifikasi' : 'ditolak'}.` });
+  })
+);
+
+/* ====================================================================
+   3. FITUR PENDAFTARAN AKUN PEMERINTAHAN (ADMINISTRATOR)
+   ==================================================================== */
+
+app.get(
+  '/api/admin/users',
+  auth,
+  role('admin'),
+  ah(async (req, res) => {
+    res.json(
+      await q(
+        `SELECT id, nama, email, username, nip, jabatan, telepon, role, status_verifikasi, must_change_password, aktif, created_at
+         FROM users
+         ORDER BY id ASC`
+      )
+    );
+  })
+);
+
+app.post(
+  '/api/admin/users',
+  auth,
+  role('admin'),
+  ah(async (req, res) => {
+    const { nama, username, nip, jabatan, telepon, email, role: r, password_sementara } = req.body;
+
+    if (!nama || nama.trim().length < 3) throw fail(400, 'Nama lengkap minimal 3 karakter.');
+    if (!username || username.trim().length < 4) throw fail(400, 'NIP atau username kedinasan minimal 4 karakter.');
+    if (!['petugas', 'lurah', 'admin'].includes(r)) throw fail(400, 'Role harus Petugas, Lurah, atau Admin.');
+    if (!password_sementara || password_sementara.length < 8) {
+      throw fail(400, 'Password sementara minimal 8 karakter.');
+    }
+
+    // Cek keunikan username / NIP
+    const existingUsername = await q('SELECT id FROM users WHERE username=? OR nip=?', [username.trim(), nip || username.trim()]);
+    if (existingUsername.length) throw fail(409, 'Username atau NIP sudah digunakan pengguna lain.');
+
+    if (email) {
+      const existingEmail = await q('SELECT id FROM users WHERE email=?', [email.trim()]);
+      if (existingEmail.length) throw fail(409, 'Email kedinasan sudah terdaftar.');
+    }
+
+    const pwHash = await bcrypt.hash(password_sementara, 10);
+    await q(
+      `INSERT INTO users(nama, email, username, nip, jabatan, telepon, password, role, status_verifikasi, must_change_password, aktif)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        nama.trim(),
+        email ? email.trim() : null,
+        username.trim(),
+        nip ? nip.trim() : username.trim(),
+        jabatan ? jabatan.trim() : null,
+        telepon ? telepon.trim() : null,
+        pwHash,
+        r,
+        'terverifikasi',
+        1, // Wajib ganti password saat login pertama
+        1,
+      ]
+    );
+
+    await log(req, 'TAMBAH_AKUN_PEMERINTAHAN', `Role: ${r}, Username: ${username}, Nama: ${nama}`);
+    res.status(201).json({ message: 'Akun kedinasan berhasil dibuat dengan password sementara.' });
+  })
+);
+
+app.patch(
+  '/api/admin/users/:id/aktif',
+  auth,
+  role('admin'),
+  ah(async (req, res) => {
+    if (+req.params.id === req.user.id) throw fail(400, 'Tidak dapat menonaktifkan akun sendiri');
+    await q('UPDATE users SET aktif=1-aktif WHERE id=?', [req.params.id]);
+    await log(req, 'TOGGLE_USER', req.params.id);
+    res.json({ message: 'Status keaktifan akun berhasil diubah.' });
+  })
+);
+
+/* ====================================================================
+   4. JENIS SURAT & PENGAJUAN SURAT
+   ==================================================================== */
+
+app.get(
+  '/api/jenis-surat',
+  auth,
+  ah(async (req, res) => {
+    const js = await q(
+      'SELECT * FROM jenis_surat' + (req.user.role === 'warga' ? ' WHERE aktif=1' : '') + ' ORDER BY id ASC'
+    );
+    const ps = await q('SELECT * FROM persyaratan ORDER BY id ASC');
+    res.json(
+      js.map((j) => ({
+        ...j,
+        form_fields: typeof j.form_fields === 'string' ? JSON.parse(j.form_fields) : j.form_fields,
+        persyaratan: ps.filter((x) => x.jenis_surat_id === j.id),
+      }))
+    );
+  })
+);
+
+app.post(
+  '/api/pengajuan',
+  auth,
+  role('warga'),
+  upload.any(),
+  ah(async (req, res) => {
+    // Pastikan akun warga sudah terverifikasi
+    const [userCheck] = await q('SELECT status_verifikasi FROM users WHERE id=?', [req.user.id]);
+    if (userCheck?.status_verifikasi !== 'terverifikasi') {
+      throw fail(
+        403,
+        'Akun Anda belum terverifikasi oleh petugas kelurahan. Silakan tunggu hingga verifikasi disetujui untuk mengajukan surat.'
+      );
+    }
+
+    const jid = +req.body.jenis_surat_id;
+    const [j] = await q('SELECT * FROM jenis_surat WHERE id=? AND aktif=1', [jid]);
+    if (!j) throw fail(400, 'Jenis surat tidak valid');
+
+    let data;
+    try {
+      data = typeof req.body.data_form === 'string' ? JSON.parse(req.body.data_form || '{}') : (req.body.data_form || {});
+    } catch {
+      throw fail(400, 'Data form tidak valid');
+    }
+
+    const fields = typeof j.form_fields === 'string' ? JSON.parse(j.form_fields) : j.form_fields;
+    for (const f of fields) {
+      if (!String(data[f.name] || '').trim()) throw fail(400, f.label + ' wajib diisi');
+    }
+
+    const [w] = await q('SELECT alamat FROM warga WHERE user_id=?', [req.user.id]);
+    if (!w?.alamat) throw fail(400, 'Lengkapi profil (alamat dll.) terlebih dahulu di menu Profil');
+
+    const miss = (await q('SELECT id,nama FROM persyaratan WHERE jenis_surat_id=?', [jid])).filter(
+      (s) => !(req.files || []).some((f) => f.fieldname === 'doc_' + s.id)
+    );
+    if (miss.length) throw fail(400, 'Dokumen belum lengkap: ' + miss.map((m) => m.nama).join(', '));
+
+    const kode = 'PGJ-' + Date.now().toString(36).toUpperCase();
+    const [r] = await db.query(
+      'INSERT INTO pengajuan(kode,user_id,jenis_surat_id,data_form) VALUES(?,?,?,?)',
+      [kode, req.user.id, jid, JSON.stringify(data)]
+    );
+
+    await saveDocs(req.files || [], r.insertId, jid);
+    await notifRole('petugas', `Pengajuan baru ${kode} (${j.nama})`);
+    await notif(req.user.id, `Pengajuan ${kode} berhasil dikirim`);
+    await log(req, 'AJUKAN_SURAT', kode);
+    res.status(201).json({ id: r.insertId, kode });
+  })
+);
+
+app.get(
+  '/api/pengajuan',
+  auth,
+  ah(async (req, res) => {
+    const c = [], p = [];
+    if (req.user.role === 'warga') {
+      c.push('p.user_id=?');
+      p.push(req.user.id);
+    }
+    if (req.user.role === 'lurah') {
+      c.push("p.status IN ('pending_approval','approved','rejected','issued')");
+    }
+    if (req.query.status) {
+      c.push('p.status=?');
+      p.push(req.query.status);
+    }
+    res.json(
+      await q(
+        `SELECT p.id,p.kode,p.status,p.created_at,j.nama AS jenis,u.nama AS pemohon FROM pengajuan p JOIN jenis_surat j ON j.id=p.jenis_surat_id JOIN users u ON u.id=p.user_id ${c.length ? 'WHERE ' + c.join(' AND ') : ''
+        } ORDER BY p.id DESC`,
+        p
+      )
+    );
+  })
+);
+
+app.get(
+  '/api/pengajuan/:id',
+  auth,
+  ah(async (req, res) => {
+    const p = await getP(req.params.id, req.user);
+    const suratList = await q(
+      "SELECT s.id, s.nomor, s.terbit_at, s.kode_verifikasi, u.nama AS lurah_nama, u.jabatan AS lurah_jabatan FROM surat s LEFT JOIN persetujuan ps ON ps.pengajuan_id = s.pengajuan_id AND ps.hasil='setuju' LEFT JOIN users u ON u.id = ps.lurah_id WHERE s.pengajuan_id=? ORDER BY s.id DESC LIMIT 1",
+      [p.id]
+    );
+    const surat = suratList[0] || null;
+
+    res.json({
+      p: {
+        ...p,
+        nik_masked: maskId(p.nik),
+      },
+      syarat: await q('SELECT * FROM persyaratan WHERE jenis_surat_id=?', [p.jenis_surat_id]),
+      dokumen: await q('SELECT id,persyaratan_id,nama_file FROM dokumen WHERE pengajuan_id=?', [p.id]),
+      riwayat: await q(
+        "SELECT 'Verifikasi' AS tipe,v.hasil,v.catatan,v.created_at,u.nama AS oleh FROM verifikasi v JOIN users u ON u.id=v.petugas_id WHERE v.pengajuan_id=? UNION ALL SELECT 'Persetujuan' AS tipe,s.hasil,s.catatan,s.created_at,u.nama AS oleh FROM persetujuan s JOIN users u ON u.id=s.lurah_id WHERE s.pengajuan_id=? ORDER BY created_at",
+        [p.id, p.id]
+      ),
+      surat,
+    });
+  })
+);
+
+app.post(
+  '/api/pengajuan/:id/revisi',
+  auth,
+  role('warga'),
+  upload.any(),
+  ah(async (req, res) => {
+    const p = await getP(req.params.id, req.user);
+    if (p.status !== 'revision_required') throw fail(409, 'Pengajuan tidak sedang meminta revisi');
+    await saveDocs(req.files || [], p.id, p.jenis_surat_id);
+    if (!(await lengkap(p.id, p.jenis_surat_id))) throw fail(400, 'Dokumen masih belum lengkap');
+    await move(p.id, ['revision_required'], 'submitted');
+    await notifRole('petugas', `Pengajuan ${p.kode} telah direvisi warga`);
+    await log(req, 'REVISI', p.kode);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.post(
+  '/api/pengajuan/:id/mulai',
+  auth,
+  role('petugas'),
+  ah(async (req, res) => {
+    const p = await getP(req.params.id, req.user);
+    await move(p.id, ['submitted'], 'under_review');
+    await notif(p.user_id, `Pengajuan ${p.kode} sedang diperiksa petugas`);
+    await log(req, 'MULAI_PERIKSA', p.kode);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.post(
+  '/api/pengajuan/:id/verifikasi',
+  auth,
+  role('petugas'),
+  ah(async (req, res) => {
+    const { hasil, catatan } = req.body;
+    const to = { lengkap: 'pending_approval', revisi: 'revision_required', ditolak: 'rejected' }[hasil];
+    if (!to) throw fail(400, 'Hasil tidak valid');
+    if (hasil !== 'lengkap' && !(catatan || '').trim()) throw fail(400, 'Catatan wajib diisi');
+    const p = await getP(req.params.id, req.user);
+    if (hasil === 'lengkap' && !(await lengkap(p.id, p.jenis_surat_id))) throw fail(400, 'Dokumen belum lengkap');
+    await move(p.id, ['under_review'], to, catatan);
+    await q('INSERT INTO verifikasi(pengajuan_id,petugas_id,hasil,catatan) VALUES(?,?,?,?)', [
+      p.id,
+      req.user.id,
+      hasil,
+      catatan || null,
+    ]);
+    await notif(
+      p.user_id,
+      `Pengajuan ${p.kode}: ${{ lengkap: 'dokumen lengkap, menunggu persetujuan Lurah', revisi: 'perlu revisi', ditolak: 'ditolak' }[hasil]
+      }`
+    );
+    if (hasil === 'lengkap') await notifRole('lurah', `Pengajuan ${p.kode} menunggu persetujuan`);
+    await log(req, 'VERIFIKASI_' + hasil.toUpperCase(), p.kode);
+    res.json({ message: 'ok' });
+  })
+);
+
+/* ====================================================================
+   HELPER PENERBITAN SURAT OTOMATIS / MANUAL
+   ==================================================================== */
+async function prosesTerbitkanSurat(pengajuanId, actorUser) {
+  const pList = await q('SELECT * FROM pengajuan WHERE id=?', [pengajuanId]);
+  if (!pList || !pList.length) throw fail(404, 'Data pengajuan tidak ditemukan');
+  const p = pList[0];
+
+  const [j] = await q('SELECT * FROM jenis_surat WHERE id=?', [p.jenis_surat_id]);
+  if (!j) throw fail(500, 'Data jenis surat tidak ditemukan');
+
+  const [l] = await q(
+    "SELECT u.nama, u.jabatan FROM persetujuan s JOIN users u ON u.id=s.lurah_id WHERE s.pengajuan_id=? AND s.hasil='setuju' ORDER BY s.id DESC LIMIT 1",
+    [p.id]
+  );
+  const [w] = await q(
+    'SELECT u.nama, w.nik, w.no_kk, w.tempat_lahir, w.tanggal_lahir, w.jenis_kelamin, w.alamat, w.pekerjaan, w.telepon FROM users u JOIN warga w ON w.user_id=u.id WHERE u.id=?',
+    [p.user_id]
+  );
+  if (!w) throw fail(500, 'Data kependudukan warga pemohon tidak ditemukan');
+
+  const existingSurat = await q('SELECT id, nomor, kode_verifikasi, file_path FROM surat WHERE pengajuan_id=?', [p.id]);
+  let nomor, kode, file;
+
+  if (existingSurat.length) {
+    const s = existingSurat[0];
+    nomor = s.nomor;
+    kode = s.kode_verifikasi;
+    file = path.resolve(s.file_path);
+
+    // Jika file fisik di penyimpanan belum ada atau terhapus, buat ulang PDF dengan nomor & kode yang sama
+    if (!fs.existsSync(file)) {
+      const storageDir = path.join(DATA_DIR, 'storage', 'surat');
+      fs.mkdirSync(storageDir, { recursive: true });
+      file = path.join(storageDir, `${kode}.pdf`);
+      const fields = typeof j.form_fields === 'string' ? JSON.parse(j.form_fields) : (j.form_fields || []);
+      const data = typeof p.data_form === 'string' ? JSON.parse(p.data_form || '{}') : (p.data_form || {});
+      const now = new Date();
+
+      await buatPdf(
+        {
+          nomor,
+          jenis: j.nama,
+          kode: j.kode,
+          template: j.template || '',
+          fields,
+          data,
+          warga: {
+            nama: w.nama,
+            nik: w.nik,
+            tempat_lahir: w.tempat_lahir || '-',
+            tanggal_lahir: w.tanggal_lahir ? String(w.tanggal_lahir).slice(0, 10) : '-',
+            jenis_kelamin: w.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
+            alamat: w.alamat || '-',
+            pekerjaan: w.pekerjaan || '-',
+            telepon: w.telepon || '-',
+          },
+          lurah: l?.nama || actorUser?.nama || 'Lurah Kelurahan Sukamaju',
+          jabatan_lurah: l?.jabatan || actorUser?.jabatan || 'Lurah Sukamaju',
+          url: `${process.env.CLIENT_URL || CLIENT}/verifikasi/${kode}`,
+          tanggal: now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+        },
+        file
+      );
+    }
+
+    if (path.resolve(s.file_path) !== file) {
+      await q('UPDATE surat SET file_path=? WHERE id=?', [file, s.id]);
+    }
+    await q("UPDATE pengajuan SET status='issued', updated_at=NOW() WHERE id=?", [p.id]);
+    return { nomor, kode, file };
+  }
+
+  // Jika belum ada di tabel surat, buat baru
+  const now = new Date();
+  const tahun = now.getFullYear();
+  const cRes = await q('SELECT COUNT(*) AS c FROM surat WHERE EXTRACT(YEAR FROM terbit_at)=?', [tahun]);
+  const n = parseInt(cRes[0]?.c || 0, 10) + 1;
+  nomor = `${String(n).padStart(3, '0')}/${j.kode}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+  kode = crypto.randomBytes(8).toString('hex');
+
+  const storageDir = path.join(DATA_DIR, 'storage', 'surat');
+  fs.mkdirSync(storageDir, { recursive: true });
+  file = path.join(storageDir, `${kode}.pdf`);
+
+  const fields = typeof j.form_fields === 'string' ? JSON.parse(j.form_fields) : (j.form_fields || []);
+  const data = typeof p.data_form === 'string' ? JSON.parse(p.data_form || '{}') : (p.data_form || {});
+
+  // Buat PDF
+  await buatPdf(
+    {
+      nomor,
+      jenis: j.nama,
+      kode: j.kode,
+      template: j.template || '',
+      fields,
+      data,
+      warga: {
+        nama: w.nama,
+        nik: w.nik,
+        tempat_lahir: w.tempat_lahir || '-',
+        tanggal_lahir: w.tanggal_lahir ? String(w.tanggal_lahir).slice(0, 10) : '-',
+        jenis_kelamin: w.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan',
+        alamat: w.alamat || '-',
+        pekerjaan: w.pekerjaan || '-',
+        telepon: w.telepon || '-',
+      },
+      lurah: l?.nama || actorUser?.nama || 'Lurah Kelurahan Sukamaju',
+      jabatan_lurah: l?.jabatan || actorUser?.jabatan || 'Lurah Sukamaju',
+      url: `${process.env.CLIENT_URL || CLIENT}/verifikasi/${kode}`,
+      tanggal: now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+    },
+    file
+  );
+
+  if (!fs.existsSync(file)) {
+    throw fail(500, 'File PDF tidak berhasil dibuat pada penyimpanan.');
+  }
+
+  await q('INSERT INTO surat(pengajuan_id,nomor,kode_verifikasi,file_path,petugas_id) VALUES(?,?,?,?,?)', [
+    p.id,
+    nomor,
+    kode,
+    file,
+    actorUser.id,
+  ]);
+  await q("UPDATE pengajuan SET status='issued', updated_at=NOW() WHERE id=?", [p.id]);
+  await notif(
+    p.user_id,
+    `Surat ${p.kode} (${j.nama}) telah diterbitkan dengan nomor ${nomor} dan siap diunduh di menu "Surat Saya".`
+  );
+  return { nomor, kode, file };
+}
+
+app.post(
+  '/api/pengajuan/:id/persetujuan',
+  auth,
+  role('lurah'),
+  ah(async (req, res) => {
+    const { hasil, catatan } = req.body;
+    if (!['setuju', 'tolak'].includes(hasil)) throw fail(400, 'Hasil tidak valid');
+    if (hasil === 'tolak' && !(catatan || '').trim()) throw fail(400, 'Alasan penolakan wajib diisi');
+    const p = await getP(req.params.id, req.user);
+    await move(p.id, ['pending_approval'], hasil === 'setuju' ? 'approved' : 'rejected', catatan);
+    await q('INSERT INTO persetujuan(pengajuan_id,lurah_id,hasil,catatan) VALUES(?,?,?,?)', [
+      p.id,
+      req.user.id,
+      hasil,
+      catatan || null,
+    ]);
+    await notif(p.user_id, `Pengajuan ${p.kode} ${hasil === 'setuju' ? 'disetujui Lurah' : 'ditolak Lurah'}`);
+
+    // Jika Lurah menyetujui, langsung terbitkan surat PDF secara otomatis agar warga langsung dapat mengunduh berkas
+    if (hasil === 'setuju') {
+      try {
+        const sRes = await prosesTerbitkanSurat(p.id, req.user);
+        await log(req, 'PERSETUJUAN_SETUJU_OTOMATIS_TERBIT', `Pengajuan: ${p.kode}, Nomor Surat: ${sRes.nomor}`);
+        return res.json({ message: 'ok', nomor: sRes.nomor, status: 'issued' });
+      } catch (autoErr) {
+        console.error('[Auto Terbit Gagal, fallback to approved]', autoErr);
+        await notifRole('petugas', `Pengajuan ${p.kode} disetujui Lurah, siap diterbitkan oleh petugas.`);
+      }
+    }
+
+    await log(req, 'PERSETUJUAN_' + hasil.toUpperCase(), p.kode);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.post(
+  '/api/pengajuan/:id/terbitkan',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const p = await getP(req.params.id, req.user);
+    if (!['approved', 'pending_approval', 'issued'].includes(p.status)) {
+      throw fail(409, 'Pengajuan belum disetujui Lurah');
+    }
+    const sRes = await prosesTerbitkanSurat(p.id, req.user);
+    await log(req, 'TERBITKAN_SURAT', `Nomor: ${sRes.nomor}, Pengajuan: ${p.kode}`);
+    res.json({ nomor: sRes.nomor, kode: sRes.kode, message: 'Surat berhasil diterbitkan' });
+  })
+);
+
+app.get(
+  '/api/pengajuan/:id/surat',
+  auth,
+  ah(async (req, res) => {
+    const p = await getP(req.params.id, req.user);
+    let [s] = await q('SELECT * FROM surat WHERE pengajuan_id=?', [p.id]);
+
+    // Jika surat di database belum ada namun status sudah approved, terbitkan otomatis
+    if (!s && p.status === 'approved') {
+      s = await prosesTerbitkanSurat(p.id, req.user);
+    }
+
+    if (!s) throw fail(404, 'Surat belum terbit untuk pengajuan ini');
+
+    let fullPath = path.resolve(s.file_path);
+    // Jika file fisik belum ada atau hilang, lakukan generate ulang secara otomatis
+    if (!fs.existsSync(fullPath)) {
+      try {
+        await prosesTerbitkanSurat(p.id, req.user);
+        const [updatedS] = await q('SELECT * FROM surat WHERE pengajuan_id=?', [p.id]);
+        if (updatedS) {
+          s = updatedS;
+          fullPath = path.resolve(s.file_path);
+        }
+      } catch (genErr) {
+        console.error('[Regenerate Surat Error]', genErr);
+      }
+    }
+
+    if (!fs.existsSync(fullPath)) {
+      throw fail(404, 'Berkas fisik surat PDF tidak ditemukan di sistem penyimpanan.');
+    }
+
+    await log(req, 'UNDUH_SURAT', `Nomor: ${s.nomor}, Pengajuan ID: ${p.id}`);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Surat-${s.nomor.replace(/[/\\?%*:|"<>]/g, '_')}.pdf"`);
+    res.sendFile(fullPath);
+  })
+);
+
+app.get(
+  '/api/dokumen/:id/file',
+  auth,
+  ah(async (req, res) => {
+    const [d] = await q('SELECT d.*,p.user_id FROM dokumen d JOIN pengajuan p ON p.id=d.pengajuan_id WHERE d.id=?', [
+      req.params.id,
+    ]);
+    if (!d) throw fail(404, 'Dokumen tidak ditemukan');
+    if (req.user.role === 'warga' && d.user_id !== req.user.id) throw fail(403, 'Akses ditolak');
+    res.type(d.mime).sendFile(path.resolve(d.path));
+  })
+);
+
+/* ====================================================================
+   5. VERIFIKASI PUBLIK, NOTIFIKASI, ARSIP, STATISTIK, SURAT SAYA
+   ==================================================================== */
+
+app.get(
+  '/api/surat-saya',
+  auth,
+  role('warga'),
+  ah(async (req, res) => {
+    const rows = await q(
+      `SELECT s.id, s.nomor, s.kode_verifikasi, s.terbit_at, s.pengajuan_id,
+              j.nama AS jenis, j.kode, p.kode AS kode_pengajuan,
+              u_lurah.nama AS lurah_nama, u_lurah.jabatan AS lurah_jabatan
+       FROM surat s
+       JOIN pengajuan p ON p.id = s.pengajuan_id
+       JOIN jenis_surat j ON j.id = p.jenis_surat_id
+       LEFT JOIN persetujuan ps ON ps.pengajuan_id = p.id AND ps.hasil = 'setuju'
+       LEFT JOIN users u_lurah ON u_lurah.id = ps.lurah_id
+       WHERE p.user_id = ?
+       ORDER BY s.id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  })
+);
+
+// Buat Surat Keluar / Surat Dinas Mandiri oleh Lurah, Petugas, atau Admin
+app.post(
+  '/api/surat-keluar',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const { tujuan, perihal, isi_surat } = req.body;
+    if (!tujuan || !tujuan.trim()) throw fail(400, 'Tujuan / penerima surat dinas wajib diisi');
+    if (!perihal || !perihal.trim()) throw fail(400, 'Perihal surat wajib diisi');
+    if (!isi_surat || !isi_surat.trim()) throw fail(400, 'Isi redaksi surat dinas wajib diisi');
+
+    const now = new Date();
+    const tahun = now.getFullYear();
+    const countKeluar = await q('SELECT COUNT(*) AS c FROM surat_keluar WHERE EXTRACT(YEAR FROM created_at) = ?', [tahun]);
+    const n = parseInt(countKeluar[0]?.c || 0, 10) + 1;
+    const nomorSuratKeluar = `005/${String(n).padStart(3, '0')}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+
+    // Ambil data lurah penandatangan
+    const [lurah] = await q("SELECT id, nama, jabatan, nip FROM users WHERE role = 'lurah' AND aktif = 1 LIMIT 1");
+
+    const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+    fs.mkdirSync(storageDir, { recursive: true });
+    const kodeFile = crypto.randomBytes(6).toString('hex');
+    const file = path.join(storageDir, `Surat-Dinas-${kodeFile}.pdf`);
+
+    const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Buat PDF surat dinas resmi dengan KOP Kelurahan Sukamaju & TTE Lurah
+    await buatPdfSuratDinas(
+      {
+        nomor: nomorSuratKeluar,
+        tujuan: tujuan.trim(),
+        perihal: perihal.trim(),
+        isi: isi_surat.trim(),
+        tanggal: tanggalStr,
+        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+        nip: lurah?.nip || '197508102000031002',
+      },
+      file
+    );
+
+    const [r] = await db.query(
+      `INSERT INTO surat_keluar (nomor_surat, tujuan, perihal, isi_surat, tanggal_surat, file_path, petugas_id, ditandatangani_oleh, status)
+       VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, 'dikirim') RETURNING id`,
+      [nomorSuratKeluar, tujuan.trim(), perihal.trim(), isi_surat.trim(), file, req.user.id, lurah?.id || req.user.id]
+    );
+
+    await notifRole('lurah', `📤 Surat dinas keluar baru diterbitkan: "${perihal}" kepada ${tujuan} (Nomor: ${nomorSuratKeluar})`);
+    await log(req, 'BUAT_SURAT_KELUAR', `Nomor: ${nomorSuratKeluar}, Tujuan: ${tujuan}`);
+
+    res.status(201).json({
+      id: r[0]?.id || r.insertId,
+      nomor_surat: nomorSuratKeluar,
+      message: 'Surat dinas resmi berhasil dibuat dan diarsipkan',
+    });
+  })
+);
+
+
+
+app.get(
+  '/api/verifikasi/:kode',
+  ah(async (req, res) => {
+    const [s] = await q(
+      `SELECT s.nomor, s.terbit_at, s.kode_verifikasi,
+              j.nama AS jenis, j.kode AS jenis_kode,
+              u.nama AS pemohon, p.status, p.kode AS kode_pengajuan,
+              w.nik
+       FROM surat s
+       JOIN pengajuan p ON p.id = s.pengajuan_id
+       JOIN jenis_surat j ON j.id = p.jenis_surat_id
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN warga w ON w.user_id = u.id
+       WHERE s.kode_verifikasi = ?`,
+      [req.params.kode]
+    );
+    if (!s) {
+      return res.status(404).json({
+        valid: false,
+        message: 'Dokumen surat dengan kode verifikasi ini tidak ditemukan di pangkalan data resmi SIPESUR.',
+      });
+    }
+
+    // Masking nama belakang dan NIK agar privasi terlindungi
+    const namaTersensor = s.pemohon
+      ? s.pemohon.split(' ').map((n, idx) => (idx === 0 ? n : n[0] + '***')).join(' ')
+      : 'Warga';
+
+    res.json({
+      valid: true,
+      nomor: s.nomor,
+      jenis: s.jenis,
+      jenis_kode: s.jenis_kode,
+      pemohon: namaTersensor,
+      nik_masked: s.nik ? maskId(s.nik) : null,
+      instansi: 'Pemerintah Kota Contoh',
+      kelurahan: 'Kelurahan Sukamaju, Kecamatan Contoh',
+      pejabat_penandatangan: 'Lurah Kelurahan Sukamaju',
+      terbit_at: s.terbit_at,
+      status_surat: s.status === 'issued' ? 'Diterbitkan (Sah & Berlaku)' : 'Dibatalkan / Tidak Berlaku',
+      keterangan: 'Surat ini diterbitkan secara digital melalui Sistem Informasi Pelayanan Surat Kelurahan (SIPESUR). Keabsahan dokumen dijamin sesuai data yang tersimpan dalam sistem informasi kependudukan resmi kelurahan.',
+    });
+  })
+);
+
+app.get(
+  '/api/notifikasi',
+  auth,
+  ah(async (req, res) =>
+    res.json(await q('SELECT * FROM notifikasi WHERE user_id=? ORDER BY id DESC LIMIT 50', [req.user.id]))
+  )
+);
+
+app.post(
+  '/api/notifikasi/baca',
+  auth,
+  ah(async (req, res) => {
+    await q('UPDATE notifikasi SET dibaca=1 WHERE user_id=?', [req.user.id]);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.delete(
+  '/api/notifikasi/:id',
+  auth,
+  ah(async (req, res) => {
+    await q('DELETE FROM notifikasi WHERE id=? AND user_id=?', [req.params.id, req.user.id]);
+    res.json({ message: 'Notifikasi berhasil dihapus' });
+  })
+);
+
+app.delete(
+  '/api/notifikasi',
+  auth,
+  ah(async (req, res) => {
+    await q('DELETE FROM notifikasi WHERE user_id=?', [req.user.id]);
+    res.json({ message: 'Semua notifikasi berhasil dibersihkan' });
+  })
+);
+
+app.get(
+  '/api/arsip',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const k = `%${req.query.q || ''}%`;
+    res.json(
+      await q(
+        'SELECT s.pengajuan_id,s.nomor,s.terbit_at,j.nama AS jenis,u.nama AS pemohon FROM surat s JOIN pengajuan p ON p.id=s.pengajuan_id JOIN jenis_surat j ON j.id=p.jenis_surat_id JOIN users u ON u.id=p.user_id WHERE s.nomor ILIKE ? OR u.nama ILIKE ? OR j.nama ILIKE ? ORDER BY s.id DESC',
+        [k, k, k]
+      )
+    );
+  })
+);
+
+app.get(
+  '/api/stats',
+  auth,
+  ah(async (req, res) => {
+    const [w, p] = req.user.role === 'warga' ? ['WHERE p.user_id=?', [req.user.id]] : ['', []];
+    const st = {};
+    const statusCounts = await q(`SELECT status,COUNT(*)::int AS n FROM pengajuan p ${w} GROUP BY status`, p);
+    statusCounts.forEach((r) => (st[r.status] = parseInt(r.n, 10)));
+    res.json({
+      status: st,
+      jenis: await q(
+        `SELECT j.nama,COUNT(*)::int AS n FROM pengajuan p JOIN jenis_surat j ON j.id=p.jenis_surat_id ${w} GROUP BY j.nama ORDER BY n DESC`,
+        p
+      ),
+      bulan: await q(
+        `SELECT TO_CHAR(p.created_at,'YYYY-MM') AS nama,COUNT(*)::int AS n FROM pengajuan p ${w} GROUP BY TO_CHAR(p.created_at,'YYYY-MM') ORDER BY nama DESC LIMIT 6`,
+        p
+      ),
+    });
+  })
+);
+
+/* ====================================================================
+   6. ADMIN SETTINGS (JENIS SURAT, PERSYARATAN, AUDIT LOGS)
+   ==================================================================== */
+const adm = [auth, role('admin')];
+
+app.post(
+  '/api/admin/jenis-surat',
+  ...adm,
+  ah(async (req, res) => {
+    const { kode, nama, template, fields } = req.body;
+    if (!kode || !nama || !fields) throw fail(400, 'Kode, nama, dan field wajib diisi');
+    const f = fields.split('|').map((x) => {
+      const [name, label] = x.split(':');
+      return { name: name.trim(), label: (label || name).trim() };
+    });
+    if ((await q('SELECT id FROM jenis_surat WHERE kode=?', [kode])).length) throw fail(409, 'Kode sudah dipakai');
+    await q('INSERT INTO jenis_surat(kode,nama,template,form_fields) VALUES(?,?,?,?)', [
+      kode.toUpperCase(),
+      nama,
+      template || '',
+      JSON.stringify(f),
+    ]);
+    await log(req, 'TAMBAH_JENIS', kode);
+    res.status(201).json({ message: 'ok' });
+  })
+);
+
+app.patch(
+  '/api/admin/jenis-surat/:id/aktif',
+  ...adm,
+  ah(async (req, res) => {
+    await q('UPDATE jenis_surat SET aktif=1-aktif WHERE id=?', [req.params.id]);
+    await log(req, 'TOGGLE_JENIS', req.params.id);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.put(
+  '/api/admin/jenis-surat/:id/template',
+  ...adm,
+  ah(async (req, res) => {
+    const { template } = req.body;
+    await q('UPDATE jenis_surat SET template=? WHERE id=?', [template || '', req.params.id]);
+    await log(req, 'UPDATE_TEMPLATE_JENIS', `ID: ${req.params.id}`);
+    res.json({ message: 'Template naskah surat berhasil diperbarui' });
+  })
+);
+
+app.post(
+  '/api/admin/persyaratan',
+  ...adm,
+  ah(async (req, res) => {
+    if (!req.body.nama) throw fail(400, 'Nama wajib diisi');
+    await q('INSERT INTO persyaratan(jenis_surat_id,nama) VALUES(?,?)', [req.body.jenis_surat_id, req.body.nama]);
+    await log(req, 'TAMBAH_PERSYARATAN', req.body.nama);
+    res.status(201).json({ message: 'ok' });
+  })
+);
+
+app.delete(
+  '/api/admin/persyaratan/:id',
+  ...adm,
+  ah(async (req, res) => {
+    try {
+      await q('DELETE FROM persyaratan WHERE id=?', [req.params.id]);
+    } catch {
+      throw fail(409, 'Persyaratan sudah dipakai dokumen pengajuan');
+    }
+    await log(req, 'HAPUS_PERSYARATAN', req.params.id);
+    res.json({ message: 'ok' });
+  })
+);
+
+app.get(
+  '/api/admin/logs',
+  ...adm,
+  ah(async (req, res) =>
+    res.json(await q('SELECT l.*,u.nama FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id ORDER BY l.id DESC LIMIT 200'))
+  )
+);
+
+/* ====================================================================
+   7. TATA KELOLA PERSURATAN KEDINASAN (SURAT MASUK, DISPOSISI, SURAT BALASAN)
+   ==================================================================== */
+
+// Daftar Surat Masuk
+app.get(
+  '/api/surat-masuk',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const qSearch = req.query.q ? `%${req.query.q}%` : null;
+    const status = req.query.status || null;
+    let whereClauses = [];
+    let params = [];
+
+    if (qSearch) {
+      whereClauses.push('(sm.nomor_surat ILIKE ? OR sm.pengirim ILIKE ? OR sm.perihal ILIKE ?)');
+      params.push(qSearch, qSearch, qSearch);
+    }
+    if (status && status !== 'all') {
+      whereClauses.push('sm.status = ?');
+      params.push(status);
+    }
+
+    const whereSql = whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : '';
+    const rows = await q(
+      `SELECT sm.*, u.nama AS pencatat,
+              d.id AS disposisi_id, d.sifat AS disposisi_sifat, d.tujuan_disposisi, d.arahan AS disposisi_arahan,
+              sk.id AS surat_keluar_id, sk.nomor_surat AS nomor_surat_balasan
+       FROM surat_masuk sm
+       LEFT JOIN users u ON u.id = sm.dicatat_oleh
+       LEFT JOIN disposisi d ON d.surat_masuk_id = sm.id
+       LEFT JOIN surat_keluar sk ON sk.surat_masuk_id = sm.id
+       ${whereSql}
+       ORDER BY sm.id DESC`,
+      params
+    );
+    res.json(rows);
+  })
+);
+
+// Buat Surat Keluar / Surat Dinas Mandiri oleh Lurah, Petugas, atau Admin
+app.post(
+  '/api/surat-keluar',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const { tujuan, perihal, isi_surat } = req.body;
+    if (!tujuan || !tujuan.trim()) throw fail(400, 'Tujuan / penerima surat dinas wajib diisi');
+    if (!perihal || !perihal.trim()) throw fail(400, 'Perihal surat wajib diisi');
+    if (!isi_surat || !isi_surat.trim()) throw fail(400, 'Isi redaksi surat dinas wajib diisi');
+
+    const now = new Date();
+    const tahun = now.getFullYear();
+    const countKeluar = await q('SELECT COUNT(*) AS c FROM surat_keluar WHERE EXTRACT(YEAR FROM created_at) = ?', [tahun]);
+    const n = parseInt(countKeluar[0]?.c || 0, 10) + 1;
+    const nomorSuratKeluar = `005/${String(n).padStart(3, '0')}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+
+    // Ambil data lurah penandatangan
+    const [lurah] = await q("SELECT id, nama, jabatan, nip FROM users WHERE role = 'lurah' AND aktif = 1 LIMIT 1");
+
+    const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+    fs.mkdirSync(storageDir, { recursive: true });
+    const kodeFile = crypto.randomBytes(6).toString('hex');
+    const file = path.join(storageDir, `Surat-Dinas-${kodeFile}.pdf`);
+
+    const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Buat PDF surat dinas resmi dengan KOP Kelurahan Sukamaju & TTE Lurah
+    await buatPdfSuratDinas(
+      {
+        nomor: nomorSuratKeluar,
+        tujuan: tujuan.trim(),
+        perihal: perihal.trim(),
+        isi: isi_surat.trim(),
+        tanggal: tanggalStr,
+        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+        nip: lurah?.nip || '197508102000031002',
+      },
+      file
+    );
+
+    const [r] = await db.query(
+      `INSERT INTO surat_keluar (nomor_surat, tujuan, perihal, isi_surat, tanggal_surat, file_path, petugas_id, ditandatangani_oleh, status)
+       VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, 'dikirim') RETURNING id`,
+      [nomorSuratKeluar, tujuan.trim(), perihal.trim(), isi_surat.trim(), file, req.user.id, lurah?.id || req.user.id]
+    );
+
+    await notifRole('lurah', `📤 Surat dinas keluar baru diterbitkan: "${perihal}" kepada ${tujuan} (Nomor: ${nomorSuratKeluar})`);
+    await log(req, 'BUAT_SURAT_KELUAR', `Nomor: ${nomorSuratKeluar}, Tujuan: ${tujuan}`);
+
+    res.status(201).json({
+      id: r[0]?.id || r.insertId,
+      nomor_surat: nomorSuratKeluar,
+      message: 'Surat dinas resmi berhasil dibuat dan diarsipkan',
+    });
+  })
+);
+
+
+
+// Catat Surat Masuk Baru
+app.post(
+  '/api/surat-masuk',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  upload.single('lampiran'),
+  ah(async (req, res) => {
+    const { nomor_surat, pengirim, tanggal_surat, perihal, ringkasan_isi } = req.body;
+    if (!nomor_surat || !pengirim || !tanggal_surat || !perihal) {
+      throw fail(400, 'Nomor surat, pengirim, tanggal surat, dan perihal wajib diisi');
+    }
+
+    const filePath = req.file ? req.file.path : null;
+
+    const [r] = await db.query(
+      `INSERT INTO surat_masuk (nomor_surat, pengirim, tanggal_surat, perihal, ringkasan_isi, file_lampiran, dicatat_oleh)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [nomor_surat, pengirim, tanggal_surat, perihal, ringkasan_isi || '', filePath, req.user.id]
+    );
+
+    // Beri notifikasi ke Lurah bahwa ada surat masuk yang memerlukan disposisi
+    await notifRole('lurah', `📬 Surat masuk baru dari ${pengirim} (Nomor: ${nomor_surat}) perihal "${perihal}". Menunggu disposisi Lurah.`);
+    await log(req, 'CATAT_SURAT_MASUK', `Nomor: ${nomor_surat}, Pengirim: ${pengirim}`);
+
+    res.status(201).json({ id: r[0]?.id || r.insertId, message: 'Surat masuk berhasil dicatat' });
+  })
+);
+
+// Detail Surat Masuk + Riwayat Disposisi + Surat Balasan
+app.get(
+  '/api/surat-masuk/:id',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const sm = await q('SELECT sm.*, u.nama AS pencatat FROM surat_masuk sm LEFT JOIN users u ON u.id = sm.dicatat_oleh WHERE sm.id = ?', [req.params.id]);
+    if (!sm.length) throw fail(404, 'Surat masuk tidak ditemukan');
+
+    const disp = await q(
+      `SELECT d.*, u.nama AS lurah_nama, u.jabatan AS lurah_jabatan
+       FROM disposisi d
+       LEFT JOIN users u ON u.id = d.lurah_id
+       WHERE d.surat_masuk_id = ?
+       ORDER BY d.id DESC`,
+      [req.params.id]
+    );
+
+    const balasan = await q(
+      `SELECT sk.*, p.nama AS pembuat, l.nama AS penandatangan
+       FROM surat_keluar sk
+       LEFT JOIN users p ON p.id = sk.petugas_id
+       LEFT JOIN users l ON l.id = sk.ditandatangani_oleh
+       WHERE sk.surat_masuk_id = ?
+       ORDER BY sk.id DESC`,
+      [req.params.id]
+    );
+
+    res.json({
+      surat: sm[0],
+      disposisi: disp,
+      balasan: balasan,
+    });
+  })
+);
+
+// Berikan Lembar Disposisi Lurah
+app.post(
+  '/api/surat-masuk/:id/disposisi',
+  auth,
+  role('lurah'),
+  ah(async (req, res) => {
+    const { tujuan_disposisi, sifat, arahan } = req.body;
+    if (!tujuan_disposisi || !arahan || !arahan.trim()) {
+      throw fail(400, 'Tujuan disposisi dan instruksi arahan Lurah wajib diisi');
+    }
+
+    const sm = await q('SELECT * FROM surat_masuk WHERE id = ?', [req.params.id]);
+    if (!sm.length) throw fail(404, 'Surat masuk tidak ditemukan');
+
+    await q(
+      `INSERT INTO disposisi (surat_masuk_id, lurah_id, tujuan_disposisi, sifat, arahan)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.params.id, req.user.id, tujuan_disposisi, sifat || 'Biasa', arahan.trim()]
+    );
+
+    await q("UPDATE surat_masuk SET status = 'didisposisi' WHERE id = ?", [req.params.id]);
+
+    await notifRole('petugas', `📋 Disposisi Lurah untuk surat masuk ${sm[0].nomor_surat}: "${arahan}". Ditujukan kepada: ${tujuan_disposisi}.`);
+    await log(req, 'DISPOSISI_LURAH', `Surat: ${sm[0].nomor_surat}, Kepada: ${tujuan_disposisi}`);
+
+    res.json({ message: 'Lembar disposisi Lurah berhasil disimpan' });
+  })
+);
+
+// Buat Surat Balasan Resmi Kedinasan atas Surat Masuk
+app.post(
+  '/api/surat-masuk/:id/balas',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const { perihal, isi_surat } = req.body;
+    if (!perihal || !isi_surat || !isi_surat.trim()) {
+      throw fail(400, 'Perihal dan isi surat balasan wajib diisi');
+    }
+
+    const smList = await q('SELECT * FROM surat_masuk WHERE id = ?', [req.params.id]);
+    if (!smList.length) throw fail(404, 'Surat masuk tidak ditemukan');
+    const sm = smList[0];
+
+    const now = new Date();
+    const tahun = now.getFullYear();
+    const countKeluar = await q('SELECT COUNT(*) AS c FROM surat_keluar WHERE EXTRACT(YEAR FROM created_at) = ?', [tahun]);
+    const n = parseInt(countKeluar[0]?.c || 0, 10) + 1;
+    const nomorSuratKeluar = `005/${String(n).padStart(3, '0')}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+
+    // Ambil data lurah
+    const [lurah] = await q("SELECT id, nama, jabatan, nip FROM users WHERE role = 'lurah' AND aktif = 1 LIMIT 1");
+
+    const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+    fs.mkdirSync(storageDir, { recursive: true });
+    const kodeFile = crypto.randomBytes(6).toString('hex');
+    const file = path.join(storageDir, `Surat-Balasan-${kodeFile}.pdf`);
+
+    const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Buat PDF surat dinas
+    await buatPdfSuratDinas(
+      {
+        nomor: nomorSuratKeluar,
+        tujuan: sm.pengirim,
+        perihal: perihal,
+        isi: isi_surat.trim(),
+        tanggal: tanggalStr,
+        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+        nip: lurah?.nip || '197508102000031002',
+      },
+      file
+    );
+
+    const [r] = await db.query(
+      `INSERT INTO surat_keluar (surat_masuk_id, nomor_surat, tujuan, perihal, isi_surat, tanggal_surat, file_path, petugas_id, ditandatangani_oleh, status)
+       VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, 'dikirim') RETURNING id`,
+      [sm.id, nomorSuratKeluar, sm.pengirim, perihal, isi_surat.trim(), file, req.user.id, lurah?.id || req.user.id]
+    );
+
+    await q("UPDATE surat_masuk SET status = 'dibalas' WHERE id = ?", [sm.id]);
+
+    await notifRole('lurah', `📨 Surat balasan resmi telah dikerjakan untuk ${sm.pengirim} dengan Nomor: ${nomorSuratKeluar}`);
+    await log(req, 'BUAT_SURAT_BALASAN', `Nomor Balasan: ${nomorSuratKeluar}, Atas Surat Masuk: ${sm.nomor_surat}`);
+
+    res.status(201).json({
+      id: r[0]?.id || r.insertId,
+      nomor_surat: nomorSuratKeluar,
+      message: 'Surat balasan resmi berhasil diterbitkan dan diarsipkan',
+    });
+  })
+);
+
+// Daftar Semua Surat Keluar / Surat Dinas
+app.get(
+  '/api/surat-keluar',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const qSearch = req.query.q ? `%${req.query.q}%` : null;
+    let whereSql = '';
+    let params = [];
+    if (qSearch) {
+      whereSql = 'WHERE sk.nomor_surat ILIKE ? OR sk.tujuan ILIKE ? OR sk.perihal ILIKE ?';
+      params = [qSearch, qSearch, qSearch];
+    }
+
+    const rows = await q(
+      `SELECT sk.*, sm.nomor_surat AS nomor_surat_masuk, sm.pengirim AS pengirim_asal,
+              p.nama AS pembuat, l.nama AS penandatangan
+       FROM surat_keluar sk
+       LEFT JOIN surat_masuk sm ON sm.id = sk.surat_masuk_id
+       LEFT JOIN users p ON p.id = sk.petugas_id
+       LEFT JOIN users l ON l.id = sk.ditandatangani_oleh
+       ${whereSql}
+       ORDER BY sk.id DESC`,
+      params
+    );
+    res.json(rows);
+  })
+);
+
+// Buat Surat Keluar / Surat Dinas Mandiri oleh Lurah, Petugas, atau Admin
+app.post(
+  '/api/surat-keluar',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const { tujuan, perihal, isi_surat } = req.body;
+    if (!tujuan || !tujuan.trim()) throw fail(400, 'Tujuan / penerima surat dinas wajib diisi');
+    if (!perihal || !perihal.trim()) throw fail(400, 'Perihal surat wajib diisi');
+    if (!isi_surat || !isi_surat.trim()) throw fail(400, 'Isi redaksi surat dinas wajib diisi');
+
+    const now = new Date();
+    const tahun = now.getFullYear();
+    const countKeluar = await q('SELECT COUNT(*) AS c FROM surat_keluar WHERE EXTRACT(YEAR FROM created_at) = ?', [tahun]);
+    const n = parseInt(countKeluar[0]?.c || 0, 10) + 1;
+    const nomorSuratKeluar = `005/${String(n).padStart(3, '0')}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+
+    // Ambil data lurah penandatangan
+    const [lurah] = await q("SELECT id, nama, jabatan, nip FROM users WHERE role = 'lurah' AND aktif = 1 LIMIT 1");
+
+    const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+    fs.mkdirSync(storageDir, { recursive: true });
+    const kodeFile = crypto.randomBytes(6).toString('hex');
+    const file = path.join(storageDir, `Surat-Dinas-${kodeFile}.pdf`);
+
+    const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Buat PDF surat dinas resmi dengan KOP Kelurahan Sukamaju & TTE Lurah
+    await buatPdfSuratDinas(
+      {
+        nomor: nomorSuratKeluar,
+        tujuan: tujuan.trim(),
+        perihal: perihal.trim(),
+        isi: isi_surat.trim(),
+        tanggal: tanggalStr,
+        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+        nip: lurah?.nip || '197508102000031002',
+      },
+      file
+    );
+
+    const [r] = await db.query(
+      `INSERT INTO surat_keluar (nomor_surat, tujuan, perihal, isi_surat, tanggal_surat, file_path, petugas_id, ditandatangani_oleh, status)
+       VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, 'dikirim') RETURNING id`,
+      [nomorSuratKeluar, tujuan.trim(), perihal.trim(), isi_surat.trim(), file, req.user.id, lurah?.id || req.user.id]
+    );
+
+    await notifRole('lurah', `📤 Surat dinas keluar baru diterbitkan: "${perihal}" kepada ${tujuan} (Nomor: ${nomorSuratKeluar})`);
+    await log(req, 'BUAT_SURAT_KELUAR', `Nomor: ${nomorSuratKeluar}, Tujuan: ${tujuan}`);
+
+    res.status(201).json({
+      id: r[0]?.id || r.insertId,
+      nomor_surat: nomorSuratKeluar,
+      message: 'Surat dinas resmi berhasil dibuat dan diarsipkan',
+    });
+  })
+);
+
+
+
+// Buat Surat Keluar / Surat Dinas Mandiri oleh Lurah, Petugas, atau Admin
+app.post(
+  '/api/surat-keluar',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const { tujuan, perihal, isi_surat } = req.body;
+    if (!tujuan || !tujuan.trim()) throw fail(400, 'Tujuan / penerima surat dinas wajib diisi');
+    if (!perihal || !perihal.trim()) throw fail(400, 'Perihal surat wajib diisi');
+    if (!isi_surat || !isi_surat.trim()) throw fail(400, 'Isi redaksi surat dinas wajib diisi');
+
+    const now = new Date();
+    const tahun = now.getFullYear();
+    const countKeluar = await q('SELECT COUNT(*) AS c FROM surat_keluar WHERE EXTRACT(YEAR FROM created_at) = ?', [tahun]);
+    const n = parseInt(countKeluar[0]?.c || 0, 10) + 1;
+    const nomorSuratKeluar = `005/${String(n).padStart(3, '0')}/KEL-SKM/${ROM[now.getMonth()]}/${tahun}`;
+
+    // Ambil data lurah penandatangan
+    const [lurah] = await q("SELECT id, nama, jabatan, nip FROM users WHERE role = 'lurah' AND aktif = 1 LIMIT 1");
+
+    const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+    fs.mkdirSync(storageDir, { recursive: true });
+    const kodeFile = crypto.randomBytes(6).toString('hex');
+    const file = path.join(storageDir, `Surat-Dinas-${kodeFile}.pdf`);
+
+    const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Buat PDF surat dinas resmi dengan KOP Kelurahan Sukamaju & TTE Lurah
+    await buatPdfSuratDinas(
+      {
+        nomor: nomorSuratKeluar,
+        tujuan: tujuan.trim(),
+        perihal: perihal.trim(),
+        isi: isi_surat.trim(),
+        tanggal: tanggalStr,
+        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+        nip: lurah?.nip || '197508102000031002',
+      },
+      file
+    );
+
+    const [r] = await db.query(
+      `INSERT INTO surat_keluar (nomor_surat, tujuan, perihal, isi_surat, tanggal_surat, file_path, petugas_id, ditandatangani_oleh, status)
+       VALUES (?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, 'dikirim') RETURNING id`,
+      [nomorSuratKeluar, tujuan.trim(), perihal.trim(), isi_surat.trim(), file, req.user.id, lurah?.id || req.user.id]
+    );
+
+    await notifRole('lurah', `📤 Surat dinas keluar baru diterbitkan: "${perihal}" kepada ${tujuan} (Nomor: ${nomorSuratKeluar})`);
+    await log(req, 'BUAT_SURAT_KELUAR', `Nomor: ${nomorSuratKeluar}, Tujuan: ${tujuan}`);
+
+    res.status(201).json({
+      id: r[0]?.id || r.insertId,
+      nomor_surat: nomorSuratKeluar,
+      message: 'Surat dinas resmi berhasil dibuat dan diarsipkan',
+    });
+  })
+);
+
+// Unduh PDF Surat Keluar / Balasan
+app.get(
+  '/api/surat-keluar/:id/pdf',
+  auth,
+  role('petugas', 'lurah', 'admin'),
+  ah(async (req, res) => {
+    const sk = await q('SELECT * FROM surat_keluar WHERE id = ?', [req.params.id]);
+    if (!sk.length) throw fail(404, 'Data surat keluar tidak ditemukan');
+    const s = sk[0];
+
+    const fullPath = s.file_path ? path.resolve(s.file_path) : null;
+    if (!fullPath || !fs.existsSync(fullPath)) {
+      // Buat ulang jika file belum ada
+      const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
+      fs.mkdirSync(storageDir, { recursive: true });
+      const kodeFile = crypto.randomBytes(6).toString('hex');
+      const newFile = path.join(storageDir, `Surat-Keluar-${kodeFile}.pdf`);
+
+      const [lurah] = await q("SELECT nama, nip FROM users WHERE id = ?", [s.ditandatangani_oleh]);
+      const now = new Date(s.tanggal_surat || s.created_at);
+      const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      await buatPdfSuratDinas(
+        {
+          nomor: s.nomor_surat,
+          tujuan: s.tujuan,
+          perihal: s.perihal,
+          isi: s.isi_surat,
+          tanggal: tanggalStr,
+          lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
+          nip: lurah?.nip || '197508102000031002',
+        },
+        newFile
+      );
+
+      await q('UPDATE surat_keluar SET file_path = ? WHERE id = ?', [newFile, s.id]);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="Surat-${s.nomor_surat.replace(/[/\\?%*:|"<>]/g, '_')}.pdf"`);
+      return res.sendFile(newFile);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Surat-${s.nomor_surat.replace(/[/\\?%*:|"<>]/g, '_')}.pdf"`);
+    res.sendFile(fullPath);
+  })
+);
+
+// Endpoint utama
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'SIPESUR Backend API aktif',
+    version: '1.0.0',
+    status: 'online'
+  });
+});
+
+// Endpoint health check
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy'
+  });
+});
+
+// Handler 404 HARUS setelah semua endpoint
+app.use((req, res) => {
+  res.status(404).json({
+    message: 'Endpoint tidak ditemukan'
+  });
+});
+
+app.use((e, req, res, next) => {
+  const s = e.status || (e.name === 'MulterError' ? 400 : 500);
+  if (s >= 400) (req.files || []).forEach((f) => fs.unlink(f.path, () => { }));
+  if (s === 500) console.error('API Error:', e.message || e);
+
+  let msg = e.message;
+  if (e.code === 'ECONNREFUSED' || e.code === 'EACCES' || e.message?.includes('connect') || e.message?.includes('password')) {
+    msg = e.message || 'Koneksi ke Supabase gagal: Pastikan password database Supabase sudah diisi di .env';
+  }
+  res.status(s).json({ message: msg || 'Kesalahan server' });
+});
+
+const PORT = process.env.PORT || 5000;
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`SIPESUR API berjalan di port ${PORT}`));
+}
+
+export default app;

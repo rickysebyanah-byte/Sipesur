@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+!.env.example
+
+# Berkas yang dihasilkan aplikasi saat berjalan lokal
+uploads/
+storage/
+
+*.log
+.DS_Store

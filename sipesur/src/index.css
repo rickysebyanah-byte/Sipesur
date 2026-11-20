@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-slate-100 font-sans text-base text-slate-900 antialiased;
+  }
+  h1 {
+    @apply font-serif text-slate-950;
+  }
+  img,
+  svg {
+    @apply max-w-full;
+  }
+  ::selection {
+    @apply bg-brand-200 text-slate-950;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-[2.5rem] select-none items-center justify-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors duration-100 disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-p,
+  .btn-blue {
+    @apply bg-brand-700 text-white hover:bg-brand-800;
+  }
+  .btn-navy {
+    @apply bg-slate-900 text-white hover:bg-slate-800;
+  }
+  .btn-o {
+    @apply border border-slate-400 bg-white text-slate-900 hover:bg-slate-50;
+  }
+  .btn-d {
+    @apply bg-rose-800 text-white hover:bg-rose-900;
+  }
+  .btn-success {
+    @apply bg-brand-700 text-white hover:bg-brand-800;
+  }
+  .btn-warn {
+    @apply bg-amber-700 text-white hover:bg-amber-800;
+  }
+
+  .inp {
+    @apply w-full rounded border border-slate-400 bg-white px-3 py-2.5 text-base text-slate-900 placeholder-slate-500 transition-colors focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-700/25 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600 sm:text-sm;
+  }
+  textarea.inp {
+    @apply resize-y;
+  }
+
+  .card {
+    @apply rounded border border-slate-300 bg-white p-4 sm:p-5;
+  }
+  .card-hover {
+    @apply hover:border-slate-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs font-bold;
+  }
+
+  .divider {
+    @apply my-4 border-t border-slate-200;
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9cfc5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a2aa9e;
+}
+
+:focus-visible {
+  outline: 2px solid #1c4d3d;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
