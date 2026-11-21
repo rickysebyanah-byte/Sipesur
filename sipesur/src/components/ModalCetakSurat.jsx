@@ -28,23 +28,23 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
   const [tab, setTab] = useState(canEdit ? 'editor' : 'preview');
 
   // ── Data kop surat ──
-  const pemkab     = (kop.kabupaten_kota || 'PEMERINTAH KOTA CONTOH').toUpperCase();
-  const namaDesa   = (kop.nama_desa      || 'KELURAHAN SUKAMAJU').toUpperCase();
-  const namaKec    = (kop.kecamatan      || 'KECAMATAN CONTOH').toUpperCase();
-  const alamatKop  = `${kop.alamat || 'Jl. Merdeka No. 1'}, Telp. ${kop.telepon || '(021) 000-0000'} \u2022 Kode Pos: ${kop.kode_pos || '12345'}`;
+  const pemkab     = (kop.kabupaten_kota || 'PEMERINTAH KOTA MEDAN').toUpperCase();
+  const namaDesa   = (kop.nama_desa      || 'KELURAHAN SUKA MAJU').toUpperCase();
+  const namaKec    = (kop.kecamatan      || 'KECAMATAN MEDAN JOHOR').toUpperCase();
+  const alamatKop  = `${kop.alamat || 'Jl. STM No. 40'}, Telp. ${kop.telepon || '0823-4123-5734'} \u2022 Kode Pos: ${kop.kode_pos || '20146'}`;
   const kontakKop  = [kop.email && `Email: ${kop.email}`, kop.website && `Website: ${kop.website}`].filter(Boolean).join(' \u2022 ');
 
   // ── Data penandatangan ──
-  const lurahNama    = surat.lurah_nama || kop.nama_lurah    || 'Drs. Hadi Purnomo, M.Si';
-  const lurahNip     = surat.lurah_nip  || kop.nip_lurah     || '197503151998031004';
-  const lurahJabatan = kop.jabatan_lurah || 'Lurah';
+  const lurahNama    = surat.lurah_nama || kop.nama_lurah    || 'Muhammad Iqbal Samosir, S.E., M.A.P.';
+  const lurahNip     = surat.lurah_nip  || kop.nip_lurah     || '198506122010011005';
+  const lurahJabatan = kop.jabatan_lurah || 'Lurah Suka Maju';
   const lurahTtd     = surat.tanda_tangan || null;
 
   // ── Tanggal & lokasi ──
   const tanggalTerbit = surat.terbit_at
     ? new Date(surat.terbit_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-  const lokasiTgl = `${(kop.nama_desa || 'Sukamaju').replace(/^(kelurahan|desa)\s+/i, '')}, ${tanggalTerbit}`;
+  const lokasiTgl = `${(kop.nama_desa || 'Suka Maju').replace(/^(kelurahan|desa)\s+/i, '')}, ${tanggalTerbit}`;
 
   // ── Form fields ──
   const formFields = Array.isArray(p.form_fields) ? p.form_fields : [];
@@ -53,13 +53,13 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
   // ── Template default dari database ──
   const templateDefault = p.template && p.template.trim()
     ? p.template.trim()
-    : `adalah benar warga ${kop.nama_desa || 'Kelurahan Sukamaju'} dan terdaftar dalam catatan kependudukan kelurahan. Surat keterangan ini diberikan untuk keperluan yang bersangkutan sesuai dengan permohonan yang telah diajukan.`;
+    : `adalah benar warga ${kop.nama_desa || 'Kelurahan Suka Maju'} dan terdaftar dalam catatan kependudukan kelurahan. Surat keterangan ini diberikan untuk keperluan yang bersangkutan sesuai dengan permohonan yang telah diajukan.`;
 
   // ── STATE ISI SURAT ──
   const [isiSurat, setIsiSurat]       = useState(formData?.redaksi_kustom || templateDefault);
   const [pembuka, setPembuka]         = useState(
     formData?.pembuka_kustom ||
-    `Yang bertanda tangan di bawah ini, ${lurahJabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'}, ${kop.kecamatan || 'Kecamatan Contoh'}, ${kop.kabupaten_kota || 'Kota Contoh'}, dengan ini menerangkan bahwa:`
+    `Yang bertanda tangan di bawah ini, ${lurahJabatan} ${kop.nama_desa || 'Kelurahan Suka Maju'}, ${kop.kecamatan || 'Kecamatan Medan Johor'}, ${kop.kabupaten_kota || 'Kota Medan'}, dengan ini menerangkan bahwa:`
   );
   const [penutup, setPenutup]         = useState(
     formData?.penutup_kustom ||
@@ -245,7 +245,7 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
         {/* TTD LURAH & CAP */}
         <div className="text-center w-64 relative font-sans text-[10.5pt]">
           <div className="text-slate-800">{lokasiTgl}</div>
-          <div className="font-bold text-slate-900 mt-0.5">{lurahJabatan} {kop.nama_desa || 'Kelurahan Sukamaju'}</div>
+          <div className="font-bold text-slate-900 mt-0.5">{lurahJabatan} {kop.nama_desa || 'Kelurahan Suka Maju'}</div>
           <div className="relative h-24 flex items-center justify-center my-1">
             {lurahTtd ? (
               <img src={lurahTtd} alt="Tanda Tangan Lurah" className="max-h-20 max-w-44 object-contain z-10 filter drop-shadow-sm" />
@@ -268,7 +268,7 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
 
       {/* 9. FOOTER */}
       <div className="mt-12 pt-3 border-t border-slate-300 text-center font-sans text-[8pt] text-slate-500">
-        {kop.nama_desa || 'Kelurahan Sukamaju'} • Dokumen ini diterbitkan secara sah dan tersimpan dalam Sistem Informasi Pelayanan Surat (SIPESUR).
+        {kop.nama_desa || 'Kelurahan Suka Maju'} • Dokumen ini diterbitkan secara sah dan tersimpan dalam Sistem Informasi Pelayanan Surat (SIPESUR).
       </div>
     </div>
   );
@@ -474,8 +474,8 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
                   <div className="text-[11px] font-semibold text-slate-600 mb-2">🚀 Pilihan Redaksi Cepat:</div>
                   <div className="flex flex-col gap-1.5">
                     {[
-                      ['Domisili', `adalah benar warga yang bertempat tinggal dan berdomisili di wilayah ${kop.nama_desa || 'Kelurahan Sukamaju'}. Surat keterangan ini diberikan untuk keperluan administrasi kependudukan sesuai permohonan yang bersangkutan.`],
-                      ['Usaha Aktif', `adalah benar warga kami yang memiliki dan menjalankan usaha aktif di wilayah ${kop.nama_desa || 'Kelurahan Sukamaju'}. Surat keterangan ini dibuat untuk menerangkan keberadaan usaha tersebut sesuai dengan keadaan sebenarnya.`],
+                      ['Domisili', `adalah benar warga yang bertempat tinggal dan berdomisili di wilayah ${kop.nama_desa || 'Kelurahan Suka Maju'}. Surat keterangan ini diberikan untuk keperluan administrasi kependudukan sesuai permohonan yang bersangkutan.`],
+                      ['Usaha Aktif', `adalah benar warga kami yang memiliki dan menjalankan usaha aktif di wilayah ${kop.nama_desa || 'Kelurahan Suka Maju'}. Surat keterangan ini dibuat untuk menerangkan keberadaan usaha tersebut sesuai dengan keadaan sebenarnya.`],
                       ['Tidak Mampu', `adalah benar warga kelurahan kami yang berdasarkan hasil verifikasi lapangan tergolong ke dalam keluarga tidak mampu secara ekonomi. Surat keterangan ini diterbitkan untuk pengajuan bantuan / beasiswa.`],
                       ['Belum Menikah', `adalah warga kelurahan kami yang berdasarkan data kependudukan hingga saat ini berstatus belum pernah menikah (lajang). Surat ini dibuat untuk memenuhi kelengkapan berkas administrasi pernikahan.`],
                       ['Kelakuan Baik / SKCK', `adalah warga kelurahan kami yang berkelakuan baik dan tidak pernah terlibat tindak kriminal. Surat pengantar ini diberikan untuk keperluan penerbitan Surat Keterangan Catatan Kepolisian (SKCK).`],

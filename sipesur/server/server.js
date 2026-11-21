@@ -622,28 +622,35 @@ app.delete('/api/anggaran/:id', auth, role('lurah', 'admin'), ah(async (req, res
    ==================================================================== */
 
 app.get('/api/cek-status/:kode', ah(async (req, res) => {
-  const kode = req.params.kode.trim().toUpperCase();
-  // Cari berdasarkan kode tracking (nomor surat) atau id
+  const kodeRaw = req.params.kode.trim();
+  const kodeUpper = kodeRaw.toUpperCase();
+  const idNum = /^\d+$/.test(kodeRaw) ? parseInt(kodeRaw, 10) : -1;
+
+  // Cari berdasarkan ID pengajuan, kode unik pengajuan, atau nomor surat resmi
   const rows = await q(`
-    SELECT p.id, p.status, p.created_at, p.updated_at,
-           p.catatan_petugas, j.nama AS jenis_surat,
-           u.nama AS nama_pemohon
+    SELECT p.id, p.kode, p.status, p.created_at, p.updated_at,
+           p.catatan, j.nama AS jenis_surat,
+           u.nama AS nama_pemohon,
+           s.nomor AS nomor_surat
     FROM pengajuan p
     JOIN jenis_surat j ON p.jenis_surat_id = j.id
     JOIN users u ON p.user_id = u.id
-    WHERE p.id = ? OR UPPER(p.nomor_surat) = ?
+    LEFT JOIN surat s ON s.pengajuan_id = p.id
+    WHERE p.id = ? OR UPPER(p.kode) = ? OR UPPER(COALESCE(s.nomor, '')) = ?
     LIMIT 1
-  `, [kode, kode]);
+  `, [idNum, kodeUpper, kodeUpper]);
   if (!rows.length) throw fail(404, 'Pengajuan tidak ditemukan. Periksa kembali nomor atau kode tracking Anda.');
   const r = rows[0];
   res.json({
     id: r.id,
+    kode: r.kode,
+    nomor_surat: r.nomor_surat || null,
     jenis_surat: r.jenis_surat,
     nama_pemohon: r.nama_pemohon ? r.nama_pemohon.split(' ')[0] + '***' : '***',
     status: r.status,
     tanggal_pengajuan: r.created_at,
     tanggal_update: r.updated_at,
-    catatan: r.catatan_petugas || null,
+    catatan: r.catatan || null,
   });
 }));
 
@@ -668,19 +675,19 @@ app.get(
     const rows = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const desa = rows[0] || {
       id: 1,
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
-      email: 'kelurahan.sukamaju@pemkot.go.id',
-      website: 'sukamaju.kelurahan.go.id',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
+      email: 'kelurahan@pemkomedan.go.id',
+      website: 'sukamaju.medan.go.id',
       logo_url: null,
-      nama_lurah: 'Drs. Hadi Purnomo, M.Si',
-      nip_lurah: '197503151998031004',
-      jabatan_lurah: 'Lurah Sukamaju',
+      nama_lurah: 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+      nip_lurah: '198506122010011005',
+      jabatan_lurah: 'Lurah Suka Maju',
     };
     res.json(desa);
   })
@@ -701,19 +708,19 @@ app.put(
           logo_url = ?, nama_lurah = ?, nip_lurah = ?, jabatan_lurah = ?, updated_at = NOW()
          WHERE id = ?`,
         [
-          b.nama_desa || 'Kelurahan Sukamaju',
-          b.kecamatan || 'Kecamatan Contoh',
-          b.kabupaten_kota || 'Pemerintah Kota Contoh',
-          b.provinsi || 'Jawa Barat',
-          b.alamat || 'Jl. Merdeka No. 1',
-          b.kode_pos || '12345',
-          b.telepon || '(021) 000-0000',
-          b.email || 'kelurahan.sukamaju@pemkot.go.id',
-          b.website || 'sukamaju.kelurahan.go.id',
+          b.nama_desa || 'Kelurahan Suka Maju',
+          b.kecamatan || 'Kecamatan Medan Johor',
+          b.kabupaten_kota || 'Pemerintah Kota Medan',
+          b.provinsi || 'Sumatera Utara',
+          b.alamat || 'Jl. STM No. 40, Kelurahan Suka Maju',
+          b.kode_pos || '20146',
+          b.telepon || '0823-4123-5734',
+          b.email || 'kelurahan@pemkomedan.go.id',
+          b.website || 'sukamaju.medan.go.id',
           b.logo_url || null,
-          b.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-          b.nip_lurah || '197503151998031004',
-          b.jabatan_lurah || 'Lurah Sukamaju',
+          b.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+          b.nip_lurah || '198506122010011005',
+          b.jabatan_lurah || 'Lurah Suka Maju',
           rows[0].id,
         ]
       );
@@ -722,19 +729,19 @@ app.put(
         `INSERT INTO profil_desa (nama_desa, kecamatan, kabupaten_kota, provinsi, alamat, kode_pos, telepon, email, website, logo_url, nama_lurah, nip_lurah, jabatan_lurah)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          b.nama_desa || 'Kelurahan Sukamaju',
-          b.kecamatan || 'Kecamatan Contoh',
-          b.kabupaten_kota || 'Pemerintah Kota Contoh',
-          b.provinsi || 'Jawa Barat',
-          b.alamat || 'Jl. Merdeka No. 1',
-          b.kode_pos || '12345',
-          b.telepon || '(021) 000-0000',
-          b.email || 'kelurahan.sukamaju@pemkot.go.id',
-          b.website || 'sukamaju.kelurahan.go.id',
+          b.nama_desa || 'Kelurahan Suka Maju',
+          b.kecamatan || 'Kecamatan Medan Johor',
+          b.kabupaten_kota || 'Pemerintah Kota Medan',
+          b.provinsi || 'Sumatera Utara',
+          b.alamat || 'Jl. STM No. 40, Kelurahan Suka Maju',
+          b.kode_pos || '20146',
+          b.telepon || '0823-4123-5734',
+          b.email || 'kelurahan@pemkomedan.go.id',
+          b.website || 'sukamaju.medan.go.id',
           b.logo_url || null,
-          b.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-          b.nip_lurah || '197503151998031004',
-          b.jabatan_lurah || 'Lurah Sukamaju',
+          b.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+          b.nip_lurah || '198506122010011005',
+          b.jabatan_lurah || 'Lurah Suka Maju',
         ]
       );
     }
@@ -755,7 +762,7 @@ app.post(
     if (rows.length) {
       await q('UPDATE profil_desa SET logo_url = ?, updated_at = NOW() WHERE id = ?', [base64Data, rows[0].id]);
     } else {
-      await q('INSERT INTO profil_desa (nama_desa, logo_url) VALUES (?, ?)', ['Kelurahan Sukamaju', base64Data]);
+      await q('INSERT INTO profil_desa (nama_desa, logo_url) VALUES (?, ?)', ['Kelurahan Suka Maju', base64Data]);
     }
     await log(req, 'UPDATE_LOGO_DESA', req.file.originalname);
     res.json({ message: 'Logo kelurahan berhasil diunggah dan diterapkan ke kop surat', logo_url: base64Data });
@@ -1114,19 +1121,19 @@ app.get(
     // Ambil profil desa untuk kop surat cetak
     const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const kop = desaList || {
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
-      email: 'kelurahan.sukamaju@pemkot.go.id',
-      website: 'sukamaju.kelurahan.go.id',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
+      email: 'kelurahan@pemkomedan.go.id',
+      website: 'sukamaju.medan.go.id',
       logo_url: null,
-      nama_lurah: 'Drs. Hadi Purnomo, M.Si',
-      nip_lurah: '197503151998031004',
-      jabatan_lurah: 'Lurah Sukamaju',
+      nama_lurah: 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+      nip_lurah: '198506122010011005',
+      jabatan_lurah: 'Lurah Suka Maju',
     };
 
     res.json({
@@ -1219,19 +1226,19 @@ async function prosesTerbitkanSurat(pengajuanId, actorUser, signatureOverride = 
   // Ambil profil desa aktif untuk Kop Surat dinamis
   const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
   const kop = desaList || {
-    nama_desa: 'Kelurahan Sukamaju',
-    kecamatan: 'Kecamatan Contoh',
-    kabupaten_kota: 'Pemerintah Kota Contoh',
-    provinsi: 'Jawa Barat',
-    alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-    kode_pos: '12345',
-    telepon: '(021) 000-0000',
-    email: 'kelurahan.sukamaju@pemkot.go.id',
-    website: 'sukamaju.kelurahan.go.id',
+    nama_desa: 'Kelurahan Suka Maju',
+    kecamatan: 'Kecamatan Medan Johor',
+    kabupaten_kota: 'Pemerintah Kota Medan',
+    provinsi: 'Sumatera Utara',
+    alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+    kode_pos: '20146',
+    telepon: '0823-4123-5734',
+    email: 'kelurahan@pemkomedan.go.id',
+    website: 'sukamaju.medan.go.id',
     logo_url: null,
-    nama_lurah: 'Drs. Hadi Purnomo, M.Si',
-    nip_lurah: '197503151998031004',
-    jabatan_lurah: 'Lurah Sukamaju',
+    nama_lurah: 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+    nip_lurah: '198506122010011005',
+    jabatan_lurah: 'Lurah Suka Maju',
   };
 
   // Ambil data lurah spesifik yang menyetujui (beda orang beda tanda tangan)
@@ -1240,9 +1247,9 @@ async function prosesTerbitkanSurat(pengajuanId, actorUser, signatureOverride = 
     [p.id]
   );
 
-  const lurahNama = l?.nama || kop.nama_lurah || actorUser?.nama || 'Drs. Hadi Purnomo, M.Si';
-  const lurahNip = l?.nip || kop.nip_lurah || actorUser?.nip || '197503151998031004';
-  const lurahJabatan = l?.jabatan || kop.jabatan_lurah || actorUser?.jabatan || 'Lurah';
+  const lurahNama = l?.nama || kop.nama_lurah || actorUser?.nama || 'Muhammad Iqbal Samosir, S.E., M.A.P.';
+  const lurahNip = l?.nip || kop.nip_lurah || actorUser?.nip || '198506122010011005';
+  const lurahJabatan = l?.jabatan || kop.jabatan_lurah || actorUser?.jabatan || 'Lurah Suka Maju';
   const lurahTtd = signatureOverride || l?.tanda_tangan_persetujuan || l?.tanda_tangan || actorUser?.tanda_tangan || null;
 
   const [w] = await q(
@@ -1531,13 +1538,13 @@ app.post(
     // Ambil data profil desa & kop surat
     const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const kop = desaList || {
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
     };
 
     // Ambil data lurah penandatangan
@@ -1559,9 +1566,9 @@ app.post(
         isi: isi_surat.trim(),
         tanggal: tanggalStr,
         kop,
-        lurah: lurah?.nama || kop.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-        nip: lurah?.nip || kop.nip_lurah || '197503151998031004',
-        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah',
+        lurah: lurah?.nama || kop.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip: lurah?.nip || kop.nip_lurah || '198506122010011005',
+        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah Suka Maju',
         tanda_tangan: lurah?.tanda_tangan || req.user.tanda_tangan || null,
       },
       file
@@ -1621,9 +1628,9 @@ app.get(
       jenis_kode: s.jenis_kode,
       pemohon: namaTersensor,
       nik_masked: s.nik ? maskId(s.nik) : null,
-      instansi: 'Pemerintah Kota Contoh',
-      kelurahan: 'Kelurahan Sukamaju, Kecamatan Contoh',
-      pejabat_penandatangan: 'Lurah Kelurahan Sukamaju',
+      instansi: 'Pemerintah Kota Medan',
+      kelurahan: 'Kelurahan Suka Maju, Kecamatan Medan Johor',
+      pejabat_penandatangan: 'Lurah Suka Maju',
       terbit_at: s.terbit_at,
       status_surat: s.status === 'issued' ? 'Diterbitkan (Sah & Berlaku)' : 'Dibatalkan / Tidak Berlaku',
       keterangan: 'Surat ini diterbitkan secara digital melalui Sistem Informasi Pelayanan Surat Kelurahan (SIPESUR). Keabsahan dokumen dijamin sesuai data yang tersimpan dalam sistem informasi kependudukan resmi kelurahan.',
@@ -1863,13 +1870,13 @@ app.post(
     // Ambil data profil desa & kop surat
     const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const kop = desaList || {
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
     };
 
     // Ambil data lurah penandatangan
@@ -1891,9 +1898,9 @@ app.post(
         isi: isi_surat.trim(),
         tanggal: tanggalStr,
         kop,
-        lurah: lurah?.nama || kop.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-        nip: lurah?.nip || kop.nip_lurah || '197503151998031004',
-        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah',
+        lurah: lurah?.nama || kop.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip: lurah?.nip || kop.nip_lurah || '198506122010011005',
+        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah Suka Maju',
         tanda_tangan: lurah?.tanda_tangan || req.user.tanda_tangan || null,
       },
       file
@@ -2124,13 +2131,13 @@ app.post(
     // Ambil data profil desa & kop surat
     const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const kop = desaList || {
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
     };
 
     // Ambil data lurah penandatangan
@@ -2152,9 +2159,9 @@ app.post(
         isi: isi_surat.trim(),
         tanggal: tanggalStr,
         kop,
-        lurah: lurah?.nama || kop.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-        nip: lurah?.nip || kop.nip_lurah || '197503151998031004',
-        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah',
+        lurah: lurah?.nama || kop.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip: lurah?.nip || kop.nip_lurah || '198506122010011005',
+        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah Suka Maju',
         tanda_tangan: lurah?.tanda_tangan || req.user.tanda_tangan || null,
       },
       file
@@ -2199,13 +2206,13 @@ app.post(
     // Ambil data profil desa & kop surat
     const [desaList] = await q('SELECT * FROM profil_desa ORDER BY id ASC LIMIT 1');
     const kop = desaList || {
-      nama_desa: 'Kelurahan Sukamaju',
-      kecamatan: 'Kecamatan Contoh',
-      kabupaten_kota: 'Pemerintah Kota Contoh',
-      provinsi: 'Jawa Barat',
-      alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-      kode_pos: '12345',
-      telepon: '(021) 000-0000',
+      nama_desa: 'Kelurahan Suka Maju',
+      kecamatan: 'Kecamatan Medan Johor',
+      kabupaten_kota: 'Pemerintah Kota Medan',
+      provinsi: 'Sumatera Utara',
+      alamat: 'Jl. STM No. 40, Kelurahan Suka Maju',
+      kode_pos: '20146',
+      telepon: '0823-4123-5734',
     };
 
     // Ambil data lurah penandatangan
@@ -2227,9 +2234,9 @@ app.post(
         isi: isi_surat.trim(),
         tanggal: tanggalStr,
         kop,
-        lurah: lurah?.nama || kop.nama_lurah || 'Drs. Hadi Purnomo, M.Si',
-        nip: lurah?.nip || kop.nip_lurah || '197503151998031004',
-        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah',
+        lurah: lurah?.nama || kop.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip: lurah?.nip || kop.nip_lurah || '198506122010011005',
+        jabatan: lurah?.jabatan || kop.jabatan_lurah || 'Lurah Suka Maju',
         tanda_tangan: lurah?.tanda_tangan || req.user.tanda_tangan || null,
       },
       file

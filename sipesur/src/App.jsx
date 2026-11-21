@@ -48,6 +48,7 @@ const MENU = {
     ['/app/ajukan', 'Ajukan surat'],
     ['/app/pengajuan', 'Pengajuan saya'],
     ['/app/surat', 'Surat saya'],
+    ['/app/berita', 'Berita & Pengumuman'],
     ['/app/profil', 'Profil kependudukan'],
   ],
   petugas: [
@@ -278,7 +279,7 @@ function Provider({ children }) {
    ==================================================================== */
 
 const LAYANAN_LIST = [
-  { kode: 'SKD', nama: 'Surat Keterangan Domisili', desc: 'Menerangkan alamat tempat tinggal resmi warga di wilayah Sukamaju.', syarat: 'KTP, Kartu Keluarga, Pengantar RT/RW', tag: 'bg-blue-50 text-brand-700 border-blue-200' },
+  { kode: 'SKD', nama: 'Surat Keterangan Domisili', desc: 'Menerangkan alamat tempat tinggal resmi warga di wilayah kelurahan.', syarat: 'KTP, Kartu Keluarga, Pengantar RT/RW', tag: 'bg-blue-50 text-brand-700 border-blue-200' },
   { kode: 'SKTM', nama: 'Surat Keterangan Tidak Mampu', desc: 'Rekomendasi bantuan sosial, KIP/beasiswa, dan keringanan biaya.', syarat: 'KTP, Kartu Keluarga, Pernyataan Penghasilan', tag: 'bg-blue-50 text-brand-700 border-blue-200' },
   { kode: 'SKU', nama: 'Surat Keterangan Usaha', desc: 'Keterangan izin usaha mikro warga untuk pengajuan legalitas/kredit.', syarat: 'KTP, KK, Foto Usaha', tag: 'bg-blue-50 text-brand-700 border-blue-200' },
   { kode: 'SKCK', nama: 'Pengantar SKCK Kepolisian', desc: 'Surat pengantar permohonan SKCK di Polsek / Polres setempat.', syarat: 'KTP, Kartu Keluarga, Pas Foto', tag: 'bg-blue-50 text-brand-700 border-blue-200' },
@@ -302,13 +303,13 @@ function Landing() {
   const [cekLoading, setCekLoading] = useState(false);
   const [cekErr, setCekErr] = useState('');
 
-  const namaDesa = desa?.nama_desa || 'Kelurahan Sukamaju';
-  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Bandung';
-  const alamat = desa?.alamat || 'Jl. Raya Sukamaju No. 12, Bandung';
-  const telepon = desa?.telepon || '(021) 555-0123';
-  const email = desa?.email || 'kelurahan@sukamaju.go.id';
-  const lurahNama = desa?.lurah_nama || desa?.nama_lurah || 'Drs. Hadi Purnomo, M.Si';
-  const lurahNip = desa?.lurah_nip || desa?.nip_lurah || 'NIP. 19750812 200212 1 003';
+  const namaDesa = desa?.nama_desa || 'Kelurahan Suka Maju';
+  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Medan';
+  const alamat = desa?.alamat || 'Jl. STM No. 40, Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan 20146';
+  const telepon = desa?.telepon || '0823-4123-5734';
+  const email = desa?.email || 'kelurahan@pemkomedan.go.id';
+  const lurahNama = desa?.lurah_nama || desa?.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.';
+  const lurahNip = desa?.lurah_nip || desa?.nip_lurah || 'NIP. 19850612 201001 1 005';
 
   const layananCepat = [
     { kode: 'SKD', icon: '🏠', nama: 'Surat Keterangan Domisili', desc: 'Keterangan tempat tinggal resmi warga', warna: 'from-blue-600 to-blue-800' },
@@ -333,15 +334,27 @@ function Landing() {
     { q: 'Apakah bisa diakses dari ponsel?', a: 'Ya, portal ini sepenuhnya responsif dan dapat diakses dari smartphone maupun tablet.' },
   ];
 
-  const berita = [
-    { tgl: '15 Nov 2026', judul: 'Peluncuran Layanan Surat Online SIPESUR', isi: 'Kelurahan Sukamaju resmi meluncurkan sistem layanan surat administrasi kependudukan secara daring untuk memudahkan warga.', kategori: 'Pengumuman', warna: 'bg-brand-100 text-brand-800' },
-    { tgl: '10 Nov 2026', judul: 'Jam Layanan Loket Khusus Akhir Tahun', isi: 'Menyambut akhir tahun 2026, loket pelayanan akan buka hingga pukul 14.00 WIB mulai tanggal 20 Desember.', kategori: 'Info Layanan', warna: 'bg-amber-100 text-amber-800' },
-    { tgl: '5 Nov 2026', judul: 'Pemutakhiran Data Kependudukan 2026', isi: 'Warga dihimbau untuk memperbarui data kependudukan sebelum 31 Desember 2026 di kantor kelurahan.', kategori: 'Himbauan', warna: 'bg-emerald-100 text-emerald-800' },
-  ];
+  const berita = (beritaData && beritaData.length > 0)
+    ? beritaData.map((b) => ({
+        id: b.id,
+        tgl: b.tanggal ? new Date(b.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
+        judul: b.judul,
+        isi: b.isi,
+        kategori: b.kategori || 'Pengumuman',
+        warna: b.kategori === 'Himbauan' ? 'bg-emerald-100 text-emerald-800'
+             : b.kategori === 'Info Layanan' ? 'bg-amber-100 text-amber-800'
+             : b.kategori === 'Kegiatan' ? 'bg-purple-100 text-purple-800'
+             : 'bg-brand-100 text-brand-800',
+      }))
+    : [
+        { tgl: '15 Nov 2026', judul: 'Peluncuran Layanan Surat Online SIPESUR', isi: `Pemerintah ${namaDesa} meluncurkan sistem layanan surat kependudukan secara daring untuk mempermudah warga.`, kategori: 'Pengumuman', warna: 'bg-brand-100 text-brand-800' },
+        { tgl: '10 Nov 2026', judul: 'Jam Layanan Loket Pelayanan Administrasi', isi: 'Loket pelayanan di kantor kelurahan dibuka pukul 08.00 - 15.00 WIB setiap hari kerja.', kategori: 'Info Layanan', warna: 'bg-amber-100 text-amber-800' },
+        { tgl: '5 Nov 2026', judul: 'Pemutakhiran Data Kependudukan & BLT Lingkungan', isi: 'Bagi seluruh warga yang mengalami perubahan data KK/domisili dihimbau memperbarui berkas di kantor kelurahan.', kategori: 'Himbauan', warna: 'bg-emerald-100 text-emerald-800' },
+      ];
 
   const struktur = [
     { jabatan: 'Lurah', nama: lurahNama, nip: lurahNip, icon: '👔' },
-    { jabatan: 'Sekretaris Kelurahan', nama: 'Dra. Sari Dewi, M.AP', nip: 'NIP. 19800201 200501 2 002', icon: '📋' },
+    { jabatan: 'Sekretaris Kelurahan (Seklur)', nama: 'Vicky Al Wirya, S.Pt., M.M.', nip: 'NIP. 19880415 201201 1 002', icon: '📋' },
     { jabatan: 'Kasi Pelayanan', nama: 'Bambang Eko, S.Sos', nip: 'NIP. 19850315 201001 1 001', icon: '🏢' },
     { jabatan: 'Kasi Pemerintahan', nama: 'Rini Anggraeni, SE', nip: 'NIP. 19870622 201101 2 003', icon: '⚖️' },
   ];
@@ -349,25 +362,29 @@ function Landing() {
   const statDemografi = [
     { label: 'Total Penduduk', nilai: '12.847', icon: '👥', warna: 'text-blue-700 bg-blue-50 border-blue-200' },
     { label: 'Jumlah KK', nilai: '3.421', icon: '🏘️', warna: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-    { label: 'RW / RT', nilai: '8 / 32', icon: '🗺️', warna: 'text-amber-700 bg-amber-50 border-amber-200' },
-    { label: 'Luas Wilayah', nilai: '2,4 km²', icon: '📐', warna: 'text-violet-700 bg-violet-50 border-violet-200' },
+    { label: 'RW / Lingkungan', nilai: '12 Lingkungan', icon: '🗺️', warna: 'text-amber-700 bg-amber-50 border-amber-200' },
+    { label: 'Luas Wilayah', nilai: '3,2 km²', icon: '📐', warna: 'text-violet-700 bg-violet-50 border-violet-200' },
   ];
 
-  const umkm = [
-    { nama: 'Warung Makan Bu Tini', jenis: 'Kuliner', alamat: 'Jl. Sukamaju No. 45', telepon: '0812-3456-7890' },
-    { nama: 'Toko Bangunan Maju Jaya', jenis: 'Material', alamat: 'Jl. Pahlawan No. 12', telepon: '0813-5678-9012' },
-    { nama: 'Jasa Laundry Kilat', jenis: 'Jasa', alamat: 'Gang Mawar No. 7', telepon: '0821-9876-5432' },
-    { nama: 'Konveksi Batik Sukamaju', jenis: 'Tekstil', alamat: 'Jl. Industri No. 3', telepon: '0858-1234-5678' },
-    { nama: 'Apotek Sehat Mandiri', jenis: 'Kesehatan', alamat: 'Jl. Sukamaju No. 88', telepon: '0877-2233-4455' },
-    { nama: 'Studio Foto Kenangan', jenis: 'Jasa', alamat: 'Jl. Merdeka No. 20', telepon: '0831-6677-8899' },
-  ];
+  const umkm = (umkmData && umkmData.length > 0)
+    ? umkmData
+    : [
+        { nama: 'Warung Nasi Khas Medan Bu Siti', jenis: 'Kuliner', alamat: 'Jl. STM No. 25, Suka Maju, Medan Johor', telepon: '0812-6543-2109' },
+        { nama: 'Toko Kelontong Berkah Johor', jenis: 'Sembako', alamat: 'Jl. Sakti Lubis No. 12, Suka Maju', telepon: '0813-7890-1234' },
+        { nama: 'Johor Laundry Express', jenis: 'Jasa', alamat: 'Jl. STM Ujung No. 8, Suka Maju', telepon: '0821-6789-0123' },
+        { nama: 'Konveksi & Bordir Maju Bersama', jenis: 'Tekstil', alamat: 'Jl. Suka Maju Indah No. 5', telepon: '0852-3456-7890' },
+        { nama: 'Apotek Sehat Medika STM', jenis: 'Kesehatan', alamat: 'Jl. STM No. 55, Suka Maju, Medan Johor', telepon: '0878-1234-5678' },
+        { nama: 'Studio Foto & Percetakan Digital', jenis: 'Jasa', alamat: 'Jl. STM No. 32, Suka Maju', telepon: '0831-9876-5432' },
+      ];
 
   const NAV = [
     { id: 'beranda', label: '🏠 Beranda' },
     { id: 'layanan', label: '📋 Layanan' },
     { id: 'profil', label: '🏛️ Profil' },
     { id: 'berita', label: '📰 Berita' },
+    { id: 'galeri', label: '🖼️ Galeri' },
     { id: 'umkm', label: '🏪 UMKM' },
+    { id: 'anggaran', label: '💰 Anggaran' },
     { id: 'kontak', label: '📞 Kontak' },
   ];
 
@@ -491,7 +508,7 @@ function Landing() {
                     <span>📋</span>
                     <span>Ajukan Surat Online</span>
                   </Link>
-                  <Link to="/login" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/30 text-white font-semibold text-sm sm:text-base py-3 px-6 transition-all">
+                  <Link to="/cek-status" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/30 text-white font-semibold text-sm sm:text-base py-3 px-6 transition-all">
                     <span>🔍</span>
                     <span>Cek Status Permohonan</span>
                   </Link>
@@ -548,11 +565,11 @@ function Landing() {
                 </div>
                 <span className="ml-auto text-white/50 group-hover:translate-x-1 transition-transform">→</span>
               </Link>
-              <Link to="/login" className="flex items-center gap-3.5 p-4 rounded-xl border-2 border-[#c8a84b] bg-[#c8a84b]/10 hover:bg-[#c8a84b]/20 text-[#8b6b1a] transition-all group shadow-sm">
+              <Link to="/cek-status" className="flex items-center gap-3.5 p-4 rounded-xl border-2 border-[#c8a84b] bg-[#c8a84b]/10 hover:bg-[#c8a84b]/20 text-[#8b6b1a] transition-all group shadow-sm">
                 <span className="text-2xl">🔍</span>
                 <div>
                   <div className="font-bold text-sm text-[#1a3a5c]">Cek Status Permohonan</div>
-                  <div className="text-slate-500 text-xs">Pantau progres surat Anda</div>
+                  <div className="text-slate-500 text-xs">Pantau progres surat tanpa login</div>
                 </div>
                 <span className="ml-auto text-slate-400 group-hover:translate-x-1 transition-transform">→</span>
               </Link>
@@ -695,20 +712,66 @@ function Landing() {
             </div>
 
             <div className="grid sm:grid-cols-3 gap-5">
-              {berita.map((b, i) => (
-                <article key={i} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow group">
-                  <div className="h-32 bg-gradient-to-br from-[#1a3a5c]/80 to-[#0f2340] flex items-center justify-center">
-                    <span className="text-5xl opacity-30">🏛️</span>
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${b.warna}`}>{b.kategori}</span>
-                      <span className="text-xs text-slate-400">{b.tgl}</span>
+              {berita.slice(0, 6).map((b, i) => (
+                <article key={b.id || i} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow group flex flex-col justify-between">
+                  <div>
+                    <div className="h-32 bg-gradient-to-br from-[#1a3a5c]/80 to-[#0f2340] flex items-center justify-center relative">
+                      <span className="text-5xl opacity-30">🏛️</span>
+                      <span className={`absolute top-3 left-3 text-[11px] font-bold px-2 py-0.5 rounded-full ${b.warna}`}>
+                        {b.kategori}
+                      </span>
                     </div>
-                    <h4 className="font-bold text-slate-900 text-sm leading-tight mb-2 group-hover:text-[#1a3a5c] transition-colors">{b.judul}</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">{b.isi}</p>
+                    <div className="p-5">
+                      <div className="text-xs text-slate-400 mb-1.5">{b.tgl}</div>
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight mb-2 group-hover:text-[#1a3a5c] transition-colors">{b.judul}</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{b.isi}</p>
+                    </div>
+                  </div>
+                  <div className="px-5 pb-4 pt-1">
+                    <Link to="/app/berita" className="text-xs font-bold text-[#1a3a5c] hover:underline inline-flex items-center gap-1">
+                      Baca selengkapnya →
+                    </Link>
                   </div>
                 </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            GALERI KEGIATAN WARGA & KELURAHAN
+        ═══════════════════════════════════════════════ */}
+        <section id="sec-galeri" className="py-12 sm:py-16 bg-white border-t border-slate-200">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="text-center mb-10">
+              <div className="inline-block bg-purple-100 text-purple-800 font-bold text-xs px-3 py-1 rounded-full mb-3">DOKUMENTASI KEGIATAN</div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Galeri Kegiatan Warga</h2>
+              <p className="mt-2 text-slate-500 text-sm max-w-lg mx-auto">Potret kebersamaan gotong royong, musyawarah pembangunan, dan pelayanan masyarakat {namaDesa}.</p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {(galeriData && galeriData.length > 0 ? galeriData : [
+                { id: 1, judul: 'Gotong Royong Kebersihan Lingkungan', deskripsi: 'Warga bersama aparatur kelurahan membersihkan drainase lingkungan', tanggal: '2026-11-12' },
+                { id: 2, judul: 'Penyaluran Bantuan Sembako Warga', deskripsi: 'Pemberian bantuan pangan bagi keluarga prasejahtera di Aula Kelurahan', tanggal: '2026-11-08' },
+                { id: 3, judul: 'Musrenbang Kelurahan', deskripsi: 'Penyusunan usulan program kerja tahun depan bersama tokoh masyarakat', tanggal: '2026-10-25' },
+                { id: 4, judul: 'Pelatihan Usaha Mikro & Legalitas SKU', deskripsi: 'Bimbingan pembuatan NIB dan SKU untuk pelaku UMKM lokal', tanggal: '2026-10-18' },
+              ]).map((g, i) => (
+                <div key={g.id || i} className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden hover:shadow-md transition-all group">
+                  <div className="h-40 bg-gradient-to-br from-[#1a3a5c] to-slate-800 flex items-center justify-center relative overflow-hidden">
+                    {g.url_foto ? (
+                      <img src={g.url_foto} alt={g.judul} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <span className="text-4xl opacity-40">📸</span>
+                    )}
+                    <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                      {g.tanggal || 'Dokumentasi'}
+                    </span>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-bold text-slate-900 text-xs line-clamp-1 mb-1">{g.judul}</h4>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{g.deskripsi}</p>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -752,17 +815,54 @@ function Landing() {
         </section>
 
         {/* ═══════════════════════════════════════════════
-            KONTAK & JAM OPERASIONAL
+            TRANSPARANSI ANGGARAN KELURAHAN
+        ═══════════════════════════════════════════════ */}
+        <section id="sec-anggaran" className="py-12 sm:py-16 bg-slate-50 border-t border-slate-200">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div>
+                <div className="inline-block bg-emerald-100 text-emerald-800 font-bold text-xs px-3 py-1 rounded-full mb-2">AKUNTABILITAS PUBLIK</div>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-slate-900">Transparansi Anggaran</h2>
+                <p className="mt-1 text-slate-500 text-xs sm:text-sm">Ringkasan alokasi dan realisasi program pembangunan di lingkungan {namaDesa}.</p>
+              </div>
+              <Link to="/anggaran" className="btn btn-p text-xs font-bold py-2.5 px-4 rounded-xl inline-flex items-center gap-1.5 shadow-sm self-start sm:self-auto">
+                <span>💰</span>
+                <span>Lihat Rincian Anggaran Lengkap →</span>
+              </Link>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tahun Anggaran</div>
+                <div className="text-2xl font-bold font-serif text-[#1a3a5c] mt-1">2026</div>
+                <div className="text-xs text-slate-400 mt-1">APBD Kota & Dana Kelurahan</div>
+              </div>
+              <div className="bg-white rounded-xl border border-emerald-200 p-5 shadow-xs bg-emerald-50/30">
+                <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Total Pagu Program</div>
+                <div className="text-2xl font-bold font-serif text-emerald-800 mt-1">Rp 920.000.000</div>
+                <div className="text-xs text-emerald-600 mt-1">5 Program Kegiatan Terlaksana</div>
+              </div>
+              <div className="bg-white rounded-xl border border-blue-200 p-5 shadow-xs bg-blue-50/30">
+                <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Realisasi Anggaran</div>
+                <div className="text-2xl font-bold font-serif text-blue-800 mt-1">92,5%</div>
+                <div className="text-xs text-blue-600 mt-1">Audit Bersih & Akuntabel</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════
+            KONTAK & JAM OPERASIONAL & PETA LOKASI
         ═══════════════════════════════════════════════ */}
         <section id="sec-kontak" className="py-12 sm:py-16 bg-gradient-to-br from-[#1a3a5c] to-[#0f2340] text-white">
           <div className="mx-auto max-w-6xl px-4">
             <div className="text-center mb-10">
               <div className="inline-block bg-white/10 text-white/80 font-bold text-xs px-3 py-1 rounded-full mb-3 border border-white/20">INFORMASI KANTOR</div>
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold">Hubungi Kami</h2>
-              <p className="mt-2 text-white/60 text-sm max-w-lg mx-auto">Kantor kami terbuka untuk menerima kunjungan dan pertanyaan warga pada jam kerja.</p>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold">Hubungi & Kunjungi Kami</h2>
+              <p className="mt-2 text-white/60 text-sm max-w-lg mx-auto">Kantor kami terbuka untuk melayani warga dengan ramah, santun, dan profesional pada hari kerja.</p>
             </div>
 
-            <div className="grid sm:grid-cols-3 gap-6">
+            <div className="grid sm:grid-cols-3 gap-6 mb-8">
               <div className="bg-white/10 border border-white/20 rounded-2xl p-5 backdrop-blur-sm">
                 <div className="text-2xl mb-3">🕐</div>
                 <h3 className="font-bold text-[#c8a84b] mb-3 text-sm">Jam Operasional</h3>
@@ -795,14 +895,14 @@ function Landing() {
                   </div>
                   <div>
                     <div className="text-white/70 text-xs mb-1">Kode Pos</div>
-                    <div className="font-semibold">40182</div>
+                    <div className="font-semibold">{desa?.kode_pos || '20146'}</div>
                   </div>
                 </div>
               </div>
 
               <div className="bg-white/10 border border-white/20 rounded-2xl p-5 backdrop-blur-sm">
                 <div className="text-2xl mb-3">📞</div>
-                <h3 className="font-bold text-[#c8a84b] mb-3 text-sm">Kontak Resmi</h3>
+                <h3 className="font-bold text-[#c8a84b] mb-3 text-sm">Kontak & Media Resmi</h3>
                 <div className="space-y-3 text-sm">
                   <div>
                     <div className="text-white/70 text-xs mb-1">Telepon Kantor</div>
@@ -812,6 +912,12 @@ function Landing() {
                     <div className="text-white/70 text-xs mb-1">Email Resmi</div>
                     <a href={`mailto:${email}`} className="font-bold hover:text-[#c8a84b] transition-colors text-xs">{email}</a>
                   </div>
+                  <div>
+                    <div className="text-white/70 text-xs mb-1">Instagram Resmi</div>
+                    <a href="https://www.instagram.com/kelurahansukamaju.medanjohor/" target="_blank" rel="noopener noreferrer" className="font-bold hover:text-[#c8a84b] transition-colors text-xs text-pink-300">
+                      @kelurahansukamaju.medanjohor
+                    </a>
+                  </div>
                   <div className="mt-3 pt-3 border-t border-white/20">
                     <div className="text-white/70 text-xs mb-2">Layanan Pengaduan Warga</div>
                     <a href={`tel:${telepon}`} className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-colors">
@@ -820,6 +926,32 @@ function Landing() {
                     </a>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Peta Lokasi Kantor */}
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-5 backdrop-blur-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-bold text-[#c8a84b] text-sm">🗺️ Peta Lokasi Kantor Kelurahan Suka Maju</h3>
+                  <p className="text-xs text-white/70">Jl. STM No. 40, Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan 20146</p>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Kantor Kelurahan Suka Maju Jl. STM No. 40 Medan Johor')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn bg-[#c8a84b] hover:bg-[#b8983b] text-[#1a3a5c] text-xs font-bold py-1.5 px-3 rounded-lg self-start sm:self-auto inline-flex items-center gap-1"
+                >
+                  <span>Buka di Google Maps ↗</span>
+                </a>
+              </div>
+              <div className="w-full h-64 rounded-xl overflow-hidden border border-white/20 shadow-inner bg-slate-800">
+                <iframe
+                  title="Peta Kantor Kelurahan Suka Maju Medan Johor"
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=98.67%2C3.52%2C98.71%2C3.56&amp;layer=mapnik&amp;marker=3.5414%2C98.6923"
+                  className="w-full h-full border-0"
+                  loading="lazy"
+                />
               </div>
             </div>
           </div>
@@ -862,9 +994,10 @@ function Landing() {
               <ul className="space-y-1.5 text-xs text-white/60">
                 <li><Link to="/login" className="hover:text-white transition-colors">→ Masuk ke Portal Warga</Link></li>
                 <li><Link to="/register" className="hover:text-white transition-colors">→ Daftar Akun Baru</Link></li>
+                <li><Link to="/cek-status" className="hover:text-white transition-colors">→ Cek Status Permohonan</Link></li>
+                <li><Link to="/anggaran" className="hover:text-white transition-colors">→ Transparansi Anggaran</Link></li>
                 <li><a href="#sec-layanan" className="hover:text-white transition-colors" onClick={(e) => { e.preventDefault(); scrollTo('layanan'); }}>→ Jenis Layanan Surat</a></li>
                 <li><a href="#sec-kontak" className="hover:text-white transition-colors" onClick={(e) => { e.preventDefault(); scrollTo('kontak'); }}>→ Kontak & Jam Layanan</a></li>
-                <li><span className="text-white/40">→ Transparansi Anggaran (segera)</span></li>
               </ul>
             </div>
           </div>
@@ -881,7 +1014,7 @@ function Landing() {
 
 function Center({ title, subtitle, children, maxWidth = 'max-w-md' }) {
   const [desa] = useGet('/profil-desa');
-  const namaDesa = desa?.nama_desa || 'Kelurahan Sukamaju';
+  const namaDesa = desa?.nama_desa || 'Kelurahan Suka Maju';
 
   return (
     <div className="flex min-h-screen items-start justify-center bg-slate-100 p-4 py-8 sm:items-center">
@@ -1081,7 +1214,7 @@ function Register() {
           <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
             <b>⏳ Status: Menunggu Verifikasi Petugas</b>
             <p className="mt-1">
-              Sesuai SOP pelayanan publik, data kependudukan Anda akan diperiksa secara manual oleh petugas Kelurahan Sukamaju untuk mencocokkan data NIK dan Kartu Keluarga sebelum Anda dapat mengajukan permohonan surat resmi.
+              Sesuai SOP pelayanan publik, data kependudukan Anda akan diperiksa secara manual oleh petugas Kelurahan Suka Maju untuk mencocokkan data NIK dan Kartu Keluarga sebelum Anda dapat mengajukan permohonan surat resmi.
             </p>
           </div>
         </div>
@@ -1162,7 +1295,7 @@ function Register() {
               <input
                 className="inp"
                 required
-                placeholder="Contoh: Bandung"
+                placeholder="Contoh: Medan"
                 value={f.tempat_lahir}
                 onChange={set('tempat_lahir')}
               />
@@ -1197,7 +1330,7 @@ function Register() {
               rows={2}
               required
               minLength={5}
-              placeholder="Contoh: Jl. Melati No. 5 RT 02/RW 03, Kelurahan Sukamaju"
+              placeholder="Contoh: Jl. STM No. 15 RT 02/RW 03, Kelurahan Suka Maju"
               value={f.alamat}
               onChange={set('alamat')}
             />
@@ -1349,7 +1482,7 @@ function Verifikasi() {
   }, [kode]);
 
   return (
-    <Center title="Keaslian surat" subtitle="Pemeriksaan surat yang diterbitkan Kelurahan Sukamaju">
+    <Center title="Keaslian surat" subtitle="Pemeriksaan keaslian surat resmi kelurahan">
       {!r ? (
         <p className="py-4 text-sm text-slate-600">Memeriksa surat…</p>
       ) : r.valid ? (
@@ -1676,6 +1809,71 @@ const Bars = ({ t, rows }) => {
   );
 };
 
+function BeritaWargaDashboard() {
+  const [list] = useGet('/berita');
+  const [baca, setBaca] = useState(null);
+
+  if (!list) return <p className="text-sm text-slate-500 py-4 text-center">Memuat pengumuman kelurahan…</p>;
+  if (list.length === 0) {
+    return <p className="text-sm text-slate-500 py-4 text-center">Belum ada pengumuman terbaru dari kelurahan.</p>;
+  }
+
+  return (
+    <div>
+      {/* Modal Baca Pengumuman Lengkap */}
+      {baca && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setBaca(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 max-w-lg w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3">
+              <span className="badge text-xs bg-blue-50 text-blue-800 border-blue-200 font-bold">
+                {baca.kategori || 'Pengumuman'}
+              </span>
+              <span className="text-xs text-slate-400">
+                {baca.tanggal ? new Date(baca.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-lg leading-snug">{baca.judul}</h3>
+              <p className="mt-3 text-sm text-slate-700 leading-relaxed whitespace-pre-line">{baca.isi}</p>
+            </div>
+            <div className="pt-3 border-t text-right">
+              <button type="button" onClick={() => setBaca(null)} className="btn btn-p text-xs py-1.5 px-4 font-bold">
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {list.slice(0, 3).map((b) => (
+          <div key={b.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between hover:shadow-xs transition-shadow">
+            <div>
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                  {b.kategori || 'Pengumuman'}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {b.tanggal ? new Date(b.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
+                </span>
+              </div>
+              <h4 className="font-bold text-slate-900 text-xs leading-snug line-clamp-2 mb-1">{b.judul}</h4>
+              <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">{b.isi}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBaca(b)}
+              className="mt-2 text-[11px] font-bold text-brand-700 hover:text-brand-900 text-left"
+            >
+              Baca selengkapnya →
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { user } = useAuth();
   const [s] = useGet('/stats');
@@ -1707,7 +1905,7 @@ function Dashboard() {
             ? 'Berkas warga yang perlu diperiksa.'
             : user.role === 'lurah'
             ? 'Surat yang menunggu pengesahan dan disposisi.'
-            : 'Ringkasan pelayanan surat Kelurahan Sukamaju.'}
+            : 'Ringkasan pelayanan surat Kelurahan Suka Maju.'}
           <span className="ml-2 capitalize text-slate-500">({user.role})</span>
         </p>
       </div>
@@ -1754,6 +1952,21 @@ function Dashboard() {
               </Link>
             </li>
           </ul>
+        </Card>
+      )}
+
+      {/* ── KHUSUS WARGA: PENGUMUMAN & BERITA KELURAHAN TERKINI ── */}
+      {user.role === 'warga' && (
+        <Card
+          title="Pengumuman & Berita Kelurahan Terkini"
+          subtitle="Informasi penting, agenda dinas, dan pengumuman resmi kelurahan"
+          rightAction={
+            <Link to="/app/berita" className="text-xs font-bold text-brand-700 hover:underline">
+              Lihat semua pengumuman →
+            </Link>
+          }
+        >
+          <BeritaWargaDashboard />
         </Card>
       )}
 
@@ -1967,7 +2180,7 @@ function Ajukan() {
             Demi keamanan data kependudukan dan keabsahan dokumen kenegaraan, permohonan surat hanya dapat dilakukan oleh warga yang akunnya telah diverifikasi oleh petugas kelurahan.
           </p>
           <p className="mt-2 text-xs text-slate-500">
-            Silakan tunggu petugas memverifikasi data NIK Anda, atau hubungi petugas loket Kelurahan Sukamaju untuk informasi lebih lanjut.
+            Silakan tunggu petugas memverifikasi data NIK Anda, atau hubungi petugas loket Kelurahan Suka Maju untuk informasi lebih lanjut.
           </p>
         </div>
       </Card>
@@ -2236,7 +2449,7 @@ function Detail() {
   ];
 
   // Template naskah resmi standar
-  const templateNaskah = p.template || 'adalah benar warga yang bertempat tinggal di wilayah Kelurahan Sukamaju. Surat keterangan ini diterbitkan secara sah untuk keperluan yang bersangkutan sesuai dengan berkas permohonan yang diajukan.';
+  const templateNaskah = p.template || 'adalah benar warga yang bertempat tinggal di wilayah Kelurahan Suka Maju. Surat keterangan ini diterbitkan secara sah untuk keperluan yang bersangkutan sesuai dengan berkas permohonan yang diajukan.';
 
   return (
     <div className="space-y-5">
@@ -2320,8 +2533,8 @@ function Detail() {
             </div>
             <div>
               <div className="text-[11px] text-slate-500 font-medium">Pejabat Penandatangan:</div>
-              <div className="font-bold text-slate-800 mt-0.5">{d.surat?.lurah_nama || 'Drs. Hadi Purnomo, M.Si'}</div>
-              <div className="text-[10px] text-slate-500">{d.surat?.lurah_jabatan || 'Lurah Sukamaju'}</div>
+              <div className="font-bold text-slate-800 mt-0.5">{d.surat?.lurah_nama || 'Muhammad Iqbal Samosir, S.E., M.A.P.'}</div>
+              <div className="text-[10px] text-slate-500">{d.surat?.lurah_jabatan || 'Lurah Suka Maju'}</div>
             </div>
             <div>
               <div className="text-[11px] text-slate-500 font-medium">Kode Verifikasi QR:</div>
@@ -2379,7 +2592,7 @@ function Detail() {
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Icon name="file" className="w-4 h-4 text-brand-600" />
-              <span>Pratinjau Draf Naskah Surat (Template Kelurahan Sukamaju)</span>
+              <span>Pratinjau Draf Naskah Surat (Template Kelurahan Suka Maju)</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
               Naskah disusun otomatis dari Template Resmi Master Surat <b>{p.jenis}</b> ({p.jkode})
@@ -2400,9 +2613,9 @@ function Detail() {
             <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg border border-slate-300 font-serif text-slate-900 text-xs sm:text-sm leading-relaxed">
               {/* KOP SURAT */}
               <div className="text-center border-b-2 border-slate-900 pb-3 mb-4">
-                <div className="text-xs font-bold">Pemerintah Kota Contoh</div>
-                <div className="text-sm sm:text-base font-bold tracking-tight">Kecamatan Contoh • Kelurahan Sukamaju</div>
-                <div className="text-[10px] text-slate-600 font-sans mt-0.5">Jl. Raya Sukamaju No. 12 • Telp: (021) 555-0123 • Kode Pos: 12345</div>
+                <div className="text-xs font-bold">Pemerintah Kota Medan</div>
+                <div className="text-sm sm:text-base font-bold tracking-tight">Kecamatan Medan Johor • Kelurahan Suka Maju</div>
+                <div className="text-[10px] text-slate-600 font-sans mt-0.5">Jl. STM No. 40 • Telp: 0823-4123-5734 • Kode Pos: 20146</div>
               </div>
 
               {/* JUDUL */}
@@ -2415,7 +2628,7 @@ function Detail() {
 
               {/* PEMBUKA */}
               <p className="mb-3 text-justify">
-                Yang bertanda tangan di bawah ini, Lurah Kelurahan Sukamaju, Kecamatan Contoh, Kota Contoh, dengan ini menerangkan bahwa:
+                Yang bertanda tangan di bawah ini, Lurah Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan, dengan ini menerangkan bahwa:
               </p>
 
               {/* DATA IDENTITAS */}
@@ -2448,8 +2661,8 @@ function Detail() {
               {/* TANDA TANGAN */}
               <div className="flex justify-end pt-2 font-sans text-xs text-right">
                 <div>
-                  <div>Sukamaju, {d.surat?.terbit_at ? tg(d.surat.terbit_at) : new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                  <div className="font-bold mt-0.5">Lurah Sukamaju</div>
+                  <div>Medan, {d.surat?.terbit_at ? tg(d.surat.terbit_at) : new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                  <div className="font-bold mt-0.5">Lurah Suka Maju</div>
                   <div className="my-3 flex justify-end">
                     {s === 'issued' ? (
                       <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded border border-emerald-300">
@@ -2461,8 +2674,8 @@ function Detail() {
                       </span>
                     )}
                   </div>
-                  <div className="font-bold underline">{d.surat?.lurah_nama || 'Drs. Hadi Purnomo, M.Si'}</div>
-                  <div className="text-[10px] text-slate-500">NIP. 19750812 200212 1 003</div>
+                  <div className="font-bold underline">{d.surat?.lurah_nama || 'Muhammad Iqbal Samosir, S.E., M.A.P.'}</div>
+                  <div className="text-[10px] text-slate-500">{d.surat?.lurah_nip || 'NIP. 19850612 201001 1 005'}</div>
                 </div>
               </div>
             </div>
@@ -2481,7 +2694,7 @@ function Detail() {
             </h3>
           </div>
           <p className="text-xs text-blue-800 leading-relaxed mb-4">
-            Lurah Sukamaju telah memberikan persetujuan ACC. Klik tombol di bawah untuk menerbitkan berkas PDF resmi ber-QR Code.
+            Lurah Suka Maju telah memberikan persetujuan ACC. Klik tombol di bawah untuk menerbitkan berkas PDF resmi ber-QR Code.
           </p>
           {['petugas', 'lurah', 'admin'].includes(r) && (
             <button
@@ -2511,7 +2724,7 @@ function Detail() {
             <p className="font-bold text-rose-800">{p.catatan || 'Dokumen persyaratan tidak memenuhi ketentuan administrasi yang berlaku.'}</p>
           </div>
           <p className="text-xs text-rose-800 leading-relaxed">
-            Silakan ajukan permohonan baru dengan berkas persyaratan yang lengkap dan valid, atau kunjungi kantor Kelurahan Sukamaju untuk informasi lebih lanjut.
+            Silakan ajukan permohonan baru dengan berkas persyaratan yang lengkap dan valid, atau kunjungi kantor Kelurahan Suka Maju untuk informasi lebih lanjut.
           </p>
         </div>
       )}
@@ -2821,7 +3034,7 @@ function SuratSaya() {
                   {s.nomor}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-2">
-                  Penandatangan: <b>{s.lurah_nama || 'Lurah Sukamaju'}</b> ({s.lurah_jabatan || 'Lurah'})
+                  Penandatangan: <b>{s.lurah_nama || 'Muhammad Iqbal Samosir, S.E., M.A.P.'}</b> ({s.lurah_jabatan || 'Lurah Suka Maju'})
                 </div>
               </div>
 
@@ -2948,7 +3161,7 @@ function SuratMasuk() {
       setSelectedSurat(res.data.surat);
       setBalasForm({
         perihal: `Tanggapan / Balasan atas Surat Nomor: ${res.data.surat.nomor_surat}`,
-        isi_surat: `Sehubungan dengan surat Saudara Nomor ${res.data.surat.nomor_surat} perihal "${res.data.surat.perihal}", bersama ini kami sampaikan bahwa Kelurahan Sukamaju telah menindaklanjuti hal tersebut sesuai dengan ketentuan yang berlaku.`,
+        isi_surat: `Sehubungan dengan surat Saudara Nomor ${res.data.surat.nomor_surat} perihal "${res.data.surat.perihal}", bersama ini kami sampaikan bahwa Kelurahan Suka Maju telah menindaklanjuti hal tersebut sesuai dengan ketentuan yang berlaku.`,
       });
     } catch (err) {
       alert(em(err));
@@ -3269,7 +3482,7 @@ function SuratMasuk() {
                         "{dp.arahan}"
                       </div>
                       <div className="text-[10px] text-slate-400 text-right">
-                        Disposisi oleh: {dp.lurah_nama || 'Lurah Sukamaju'} • {tg(dp.tanggal_disposisi)}
+                        Disposisi oleh: {dp.lurah_nama || 'Lurah Suka Maju'} • {tg(dp.tanggal_disposisi)}
                       </div>
                     </div>
                   ))}
@@ -3372,7 +3585,7 @@ function SuratMasuk() {
                         {b.isi_surat}
                       </p>
                       <div className="text-[10px] text-slate-400 text-right pt-1 border-t">
-                        Dibuat: {tg(b.created_at)} • Penandatangan: {b.penandatangan || 'Lurah Sukamaju'}
+                        Dibuat: {tg(b.created_at)} • Penandatangan: {b.penandatangan || 'Lurah Suka Maju'}
                       </div>
                     </div>
                   ))}
@@ -3388,7 +3601,7 @@ function SuratMasuk() {
                     <span className="text-xs font-bold text-emerald-800 block">
                       Buat & Terbitkan Surat Balasan Resmi
                     </span>
-                    <span className="text-[10px] text-slate-400">Format Dinas Resmi Ber-KOP Kelurahan Sukamaju</span>
+                    <span className="text-[10px] text-slate-400">Format Dinas Resmi Ber-KOP Kelurahan Suka Maju</span>
                   </div>
 
                   <Field l="Perihal Surat Balasan" req>
@@ -3405,7 +3618,7 @@ function SuratMasuk() {
                       className="inp text-xs"
                       rows={4}
                       required
-                      placeholder="Tuliskan isi kalimat jawaban/tanggapan resmi dari Kelurahan Sukamaju..."
+                      placeholder="Tuliskan isi kalimat jawaban/tanggapan resmi dari Kelurahan Suka Maju..."
                       value={balasForm.isi_surat}
                       onChange={(e) => setBalasForm({ ...balasForm, isi_surat: e.target.value })}
                     />
@@ -3471,7 +3684,7 @@ function SuratKeluar() {
     <div className="space-y-4">
       <Card
         title="Buku Agenda Surat Keluar & Surat Dinas Kelurahan"
-        subtitle="Daftar surat dinas resmi dan surat balasan yang diterbitkan serta ditandatangani oleh Lurah Sukamaju"
+        subtitle="Daftar surat dinas resmi dan surat balasan yang diterbitkan serta disahkan oleh Lurah"
         rightAction={
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -3676,7 +3889,7 @@ function SuratKeluar() {
                   <span>Buat Surat Dinas / Surat Keluar Resmi</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Diterbitkan dengan KOP resmi Kelurahan Sukamaju & disahkan oleh Lurah
+                  Diterbitkan dengan KOP resmi Kelurahan Suka Maju & disahkan oleh Lurah
                 </p>
               </div>
               <button
@@ -3689,7 +3902,7 @@ function SuratKeluar() {
             </div>
 
             <form onSubmit={handleBuatSurat} className="space-y-3.5">
-              <Field l="Tujuan / Penerima Surat Dinas" req hint="Contoh: Seluruh Ketua RW/RT se-Kelurahan Sukamaju / Camat Sukamaju / Warga Lingkungan RW 02">
+              <Field l="Tujuan / Penerima Surat Dinas" req hint="Contoh: Seluruh Kepling se-Kelurahan Suka Maju / Camat Medan Johor / Tokoh Masyarakat">
                 <input
                   className="inp text-xs"
                   required
@@ -3714,14 +3927,14 @@ function SuratKeluar() {
                   className="inp text-xs font-serif leading-relaxed"
                   rows={6}
                   required
-                  placeholder="Sehubungan dengan rencana pelaksanaan kegiatan kerja bakti lingkungan di wilayah Kelurahan Sukamaju, bersama ini kami sampaikan kepada seluruh warga..."
+                  placeholder="Sehubungan dengan rencana pelaksanaan kegiatan gotong royong dan kebersihan lingkungan di wilayah Kelurahan Suka Maju, bersama ini kami sampaikan kepada seluruh warga..."
                   value={f.isi_surat}
                   onChange={(e) => setF({ ...f, isi_surat: e.target.value })}
                 />
               </Field>
 
               <div className="rounded-lg bg-blue-50 border border-blue-200/80 p-3 text-[11px] text-blue-900 leading-relaxed">
-                <b>Pengesahan Otomatis:</b> Dokumen fisik PDF akan otomatis dibubuhi KOP Resmi Pemerintah Kota & Kelurahan Sukamaju, Nomor Registrasi Agenda Keluar, serta blok tanda tangan resmi Lurah Sukamaju.
+                <b>Pengesahan Otomatis:</b> Dokumen fisik PDF akan otomatis dibubuhi KOP Resmi Pemerintah Kota Medan & Kelurahan Suka Maju, Nomor Registrasi Agenda Keluar, serta blok tanda tangan resmi Lurah Suka Maju.
               </div>
 
               <Msg m={m} />
@@ -4197,7 +4410,7 @@ function Pengguna() {
               type="text"
               required
               minLength={8}
-              placeholder="Contoh: Sukamaju2026!"
+              placeholder="Contoh: SukaMaju2026!"
               value={f.password_sementara}
               onChange={set('password_sementara')}
             />
@@ -4391,7 +4604,7 @@ function Jenis() {
           <textarea
             className="inp text-xs"
             rows={2}
-            placeholder="Template klausul naskah surat (contoh: adalah benar warga yang bertempat tinggal di wilayah Kelurahan Sukamaju...)"
+            placeholder="Template klausul naskah surat (contoh: adalah benar warga yang bertempat tinggal di wilayah Kelurahan Suka Maju...)"
             value={f.template}
             onChange={(e) => setF({ ...f, template: e.target.value })}
           />
@@ -4557,6 +4770,8 @@ function ProfilDesaWrapper() {
    1. MANAJEMEN BERITA & PENGUMUMAN (ADMIN / PETUGAS / LURAH)
    ==================================================================== */
 function BeritaKelurahan() {
+  const { user } = useAuth();
+  const canManage = ['petugas', 'lurah', 'admin'].includes(user?.role);
   const [list, load] = useGet('/berita');
   const [f, setF] = useState({
     judul: '',
@@ -4566,9 +4781,11 @@ function BeritaKelurahan() {
   });
   const [editId, setEditId] = useState(null);
   const [hapusId, setHapusId] = useState(null);
+  const [bacaModal, setBacaModal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [m, setM] = useState(null);
   const [katFilter, setKatFilter] = useState('Semua');
+  const [qSearch, setQSearch] = useState('');
 
   const call = async (fn) => {
     try {
@@ -4625,11 +4842,42 @@ function BeritaKelurahan() {
     });
   };
 
-  const filtered = (list || []).filter((b) => katFilter === 'Semua' || b.kategori === katFilter);
+  const filtered = (list || []).filter((b) => {
+    const matchKat = katFilter === 'Semua' || b.kategori === katFilter;
+    const matchQ = !qSearch.trim() ||
+      (b.judul || '').toLowerCase().includes(qSearch.toLowerCase()) ||
+      (b.isi || '').toLowerCase().includes(qSearch.toLowerCase());
+    return matchKat && matchQ;
+  });
   const targetHapus = hapusId ? (list || []).find((b) => b.id === hapusId) : null;
 
   return (
     <div className="space-y-6">
+      {/* Modal Baca Pengumuman Lengkap untuk Warga & Petugas */}
+      {bacaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setBacaModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 max-w-lg w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3">
+              <span className="badge text-xs bg-blue-50 text-blue-800 border-blue-200 font-bold">
+                {bacaModal.kategori || 'Pengumuman'}
+              </span>
+              <span className="text-xs text-slate-400">
+                {bacaModal.tanggal ? new Date(bacaModal.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+              </span>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 text-lg leading-snug">{bacaModal.judul}</h3>
+              <p className="mt-3 text-sm text-slate-700 leading-relaxed whitespace-pre-line">{bacaModal.isi}</p>
+            </div>
+            <div className="pt-3 border-t text-right">
+              <button type="button" onClick={() => setBacaModal(null)} className="btn btn-p text-xs py-1.5 px-4 font-bold">
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal konfirmasi hapus berita */}
       {hapusId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setHapusId(null)}>
@@ -4638,7 +4886,7 @@ function BeritaKelurahan() {
               <div className="text-4xl">🗑️</div>
               <h3 className="font-bold text-rose-900 text-lg">Hapus Berita Ini?</h3>
               <p className="text-sm text-slate-600 leading-relaxed">
-                Berita <strong>"{targetHapus?.judul}"</strong> akan dihapus permanen dari basis data dan beranda portal warga.
+                Berita <strong>"{targetHapus?.judul}"</strong> akan dihapus permanen dari basis data dan portal warga.
               </p>
             </div>
             <div className="flex gap-3">
@@ -4649,88 +4897,97 @@ function BeritaKelurahan() {
         </div>
       )}
 
-      <Card
-        title={editId ? "✏️ Perbarui Berita / Pengumuman" : "📰 Terbitkan Berita & Pengumuman Baru"}
-        subtitle="Berita yang dikelola di sini langsung tampil secara dinamis pada halaman Beranda portal publik warga"
-      >
-        <div className="rounded-xl bg-blue-50 border border-blue-200 p-3.5 text-xs text-blue-900 mb-4">
-          <strong>ℹ️ Hak Akses Konten:</strong> Hanya Pejabat Berwenang (Admin, Petugas, Lurah) yang dapat menerbitkan atau memperbarui berita kelurahan. Warga hanya memiliki hak akses baca di beranda.
-        </div>
+      {canManage && (
+        <Card
+          title={editId ? "✏️ Perbarui Berita / Pengumuman" : "📰 Terbitkan Berita & Pengumuman Baru"}
+          subtitle="Berita yang dikelola di sini langsung tampil secara dinamis pada halaman Beranda portal publik warga"
+        >
+          <div className="rounded-xl bg-blue-50 border border-blue-200 p-3.5 text-xs text-blue-900 mb-4">
+            <strong>ℹ️ Hak Akses Konten:</strong> Hanya Pejabat Berwenang (Admin, Petugas, Lurah) yang dapat menerbitkan atau memperbarui berita kelurahan. Warga hanya memiliki hak akses baca.
+          </div>
 
-        <form onSubmit={simpan} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <label className="text-xs font-bold text-slate-700 block mb-1">Judul Berita / Pengumuman *</label>
-              <input
+          <form onSubmit={simpan} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold text-slate-700 block mb-1">Judul Berita / Pengumuman *</label>
+                <input
+                  className="inp text-sm"
+                  required
+                  placeholder="Contoh: Jadwal Pelayanan Khusus Akhir Pekan Kelurahan"
+                  value={f.judul}
+                  onChange={(e) => setF({ ...f, judul: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Kategori *</label>
+                <select
+                  className="inp text-sm"
+                  value={f.kategori}
+                  onChange={(e) => setF({ ...f, kategori: e.target.value })}
+                >
+                  <option value="Pengumuman">📢 Pengumuman</option>
+                  <option value="Info Layanan">ℹ️ Info Layanan</option>
+                  <option value="Himbauan">⚠️ Himbauan</option>
+                  <option value="Kegiatan">🎉 Kegiatan</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Tanggal Terbit</label>
+                <input
+                  type="date"
+                  className="inp text-sm"
+                  value={f.tanggal}
+                  onChange={(e) => setF({ ...f, tanggal: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 block mb-1">Isi Lengkap Berita / Uraian Pengumuman *</label>
+              <textarea
+                rows={4}
                 className="inp text-sm"
                 required
-                placeholder="Contoh: Jadwal Pelayanan Khusus Akhir Pekan Kelurahan Sukamaju"
-                value={f.judul}
-                onChange={(e) => setF({ ...f, judul: e.target.value })}
+                placeholder="Tuliskan isi berita, pengumuman, atau instruksi resmi untuk warga..."
+                value={f.isi}
+                onChange={(e) => setF({ ...f, isi: e.target.value })}
               />
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">Kategori *</label>
-              <select
-                className="inp text-sm"
-                value={f.kategori}
-                onChange={(e) => setF({ ...f, kategori: e.target.value })}
-              >
-                <option value="Pengumuman">📢 Pengumuman</option>
-                <option value="Info Layanan">ℹ️ Info Layanan</option>
-                <option value="Himbauan">⚠️ Himbauan</option>
-                <option value="Kegiatan">🎉 Kegiatan</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">Tanggal Terbit</label>
-              <input
-                type="date"
-                className="inp text-sm"
-                value={f.tanggal}
-                onChange={(e) => setF({ ...f, tanggal: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-slate-700 block mb-1">Isi Lengkap Berita / Uraian Pengumuman *</label>
-            <textarea
-              rows={4}
-              className="inp text-sm"
-              required
-              placeholder="Tuliskan isi berita, pengumuman, atau instruksi resmi untuk warga..."
-              value={f.isi}
-              onChange={(e) => setF({ ...f, isi: e.target.value })}
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button type="submit" disabled={loading} className="btn btn-p text-sm font-bold py-2 px-5">
-              {loading ? 'Menyimpan...' : editId ? '💾 Simpan Perubahan' : '🚀 Terbitkan Berita'}
-            </button>
-            {editId && (
-              <button type="button" onClick={batalEdit} className="btn btn-o text-sm py-2 px-4">
-                Batal Edit
+            <div className="flex items-center gap-3">
+              <button type="submit" disabled={loading} className="btn btn-p text-sm font-bold py-2 px-5">
+                {loading ? 'Menyimpan...' : editId ? '💾 Simpan Perubahan' : '🚀 Terbitkan Berita'}
               </button>
-            )}
-          </div>
-        </form>
+              {editId && (
+                <button type="button" onClick={batalEdit} className="btn btn-o text-sm py-2 px-4">
+                  Batal Edit
+                </button>
+              )}
+            </div>
+          </form>
 
-        <div className="mt-4">
-          <Msg m={m} />
-        </div>
-      </Card>
+          <div className="mt-4">
+            <Msg m={m} />
+          </div>
+        </Card>
+      )}
 
       {/* Daftar Berita Terbit */}
       <Card
         title={`Daftar Berita & Pengumuman (${filtered.length})`}
-        subtitle="Kelola dan pantau seluruh artikel yang sedang aktif di portal warga"
+        subtitle="Kelola dan pantau seluruh artikel pengumuman yang aktif di portal warga"
         rightAction={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              placeholder="Cari pengumuman..."
+              value={qSearch}
+              onChange={(e) => setQSearch(e.target.value)}
+              className="inp text-xs py-1 px-2.5 w-40"
+            />
             {['Semua', 'Pengumuman', 'Info Layanan', 'Himbauan', 'Kegiatan'].map((k) => (
               <button
                 key={k}
@@ -4764,21 +5021,32 @@ function BeritaKelurahan() {
                   <h3 className="font-bold text-slate-900 text-sm mb-1.5 leading-snug">{b.judul}</h3>
                   <p className="text-xs text-slate-600 leading-relaxed line-clamp-3 mb-3">{b.isi}</p>
                 </div>
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => mulaiEdit(b)}
-                    className="btn btn-o text-xs py-1 px-3 font-semibold text-slate-700"
+                    onClick={() => setBacaModal(b)}
+                    className="text-xs font-bold text-brand-700 hover:underline"
                   >
-                    ✏️ Edit
+                    Baca Selengkapnya →
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setHapusId(b.id)}
-                    className="btn text-xs py-1 px-3 font-semibold text-rose-700 border border-rose-200 hover:bg-rose-50"
-                  >
-                    🗑️ Hapus
-                  </button>
+                  {canManage && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => mulaiEdit(b)}
+                        className="btn btn-o text-xs py-1 px-3 font-semibold text-slate-700"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHapusId(b.id)}
+                        className="btn text-xs py-1 px-3 font-semibold text-rose-700 border border-rose-200 hover:bg-rose-50"
+                      >
+                        🗑️ Hapus
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -4938,7 +5206,7 @@ function UmkmKelurahan() {
               <label className="text-xs font-bold text-slate-700 block mb-1">Alamat Usaha / Lokasi</label>
               <input
                 className="inp text-sm"
-                placeholder="Contoh: Jl. Sukamaju No. 45 RT 02/03"
+                placeholder="Contoh: Jl. STM No. 40 RT 02/03"
                 value={f.alamat}
                 onChange={(e) => setF({ ...f, alamat: e.target.value })}
               />
@@ -5600,8 +5868,8 @@ function CekStatusPublic() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
-  const namaDesa = desa?.nama_desa || 'Kelurahan Sukamaju';
-  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Bandung';
+  const namaDesa = desa?.nama_desa || 'Kelurahan Suka Maju';
+  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Medan';
 
   const lacak = async (e) => {
     e.preventDefault();
@@ -5768,8 +6036,8 @@ function CekStatusPublic() {
 function TransparansiAnggaranPublic() {
   const [desa] = useGet('/profil-desa');
   const [anggaran] = useGet('/anggaran');
-  const namaDesa = desa?.nama_desa || 'Kelurahan Sukamaju';
-  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Bandung';
+  const namaDesa = desa?.nama_desa || 'Kelurahan Suka Maju';
+  const pemkab = desa?.kabupaten_kota || 'Pemerintah Kota Medan';
 
   const totalPagu = (anggaran || []).reduce((a, c) => a + (Number(c.pagu) || 0), 0);
   const totalRealisasi = (anggaran || []).reduce((a, c) => a + (Number(c.realisasi) || 0), 0);
@@ -5909,11 +6177,7 @@ export default function App() {
             />
             <Route
               path="berita"
-              element={
-                <Only r={['petugas', 'lurah', 'admin']}>
-                  <BeritaKelurahan />
-                </Only>
-              }
+              element={<BeritaKelurahan />}
             />
             <Route
               path="umkm"

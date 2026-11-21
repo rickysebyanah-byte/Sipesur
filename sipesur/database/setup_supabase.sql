@@ -138,19 +138,19 @@ CREATE TABLE surat (
 
 CREATE TABLE IF NOT EXISTS profil_desa (
   id SERIAL PRIMARY KEY,
-  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Sukamaju',
-  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Contoh',
-  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Contoh',
-  provinsi VARCHAR(100) NOT NULL DEFAULT 'Jawa Barat',
-  alamat TEXT NOT NULL DEFAULT 'Jl. Merdeka No. 1',
-  kode_pos VARCHAR(10) NOT NULL DEFAULT '12345',
-  telepon VARCHAR(30) NOT NULL DEFAULT '(021) 000-0000',
-  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan.sukamaju@pemkot.go.id',
-  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.kelurahan.go.id',
+  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Suka Maju',
+  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Medan Johor',
+  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Medan',
+  provinsi VARCHAR(100) NOT NULL DEFAULT 'Sumatera Utara',
+  alamat TEXT NOT NULL DEFAULT 'Jl. STM No. 40, Kelurahan Suka Maju',
+  kode_pos VARCHAR(10) NOT NULL DEFAULT '20146',
+  telepon VARCHAR(30) NOT NULL DEFAULT '0823-4123-5734',
+  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan@pemkomedan.go.id',
+  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.medan.go.id',
   logo_url TEXT,
-  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Drs. Hadi Purnomo, M.Si',
-  nip_lurah VARCHAR(30) NOT NULL DEFAULT '197503151998031004',
-  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Sukamaju',
+  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+  nip_lurah VARCHAR(30) NOT NULL DEFAULT '198506122010011005',
+  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Suka Maju',
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -331,7 +331,7 @@ INSERT INTO users (nama,email,username,nip,jabatan,telepon,password,role,status_
  '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W','admin','terverifikasi',0,1),
 ('Siti Rohmah, S.AP','petugas@sipesur.test','petugas','198505122010012003','Petugas Pelayanan Administrasi','081234567891',
  '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W','petugas','terverifikasi',0,1),
-('Drs. Hadi Purnomo, M.Si','lurah@sipesur.test','lurah','197503151998031004','Lurah Sukamaju','081234567892',
+('Muhammad Iqbal Samosir, S.E., M.A.P.','lurah@sipesur.test','lurah','198506122010011005','Lurah Suka Maju','0823-4123-5734',
  '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W','lurah','terverifikasi',0,1),
 ('Budi Santoso','warga@sipesur.test','3201010101900001',NULL,NULL,'081200000001',
  '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W','warga','terverifikasi',0,1),
@@ -339,23 +339,23 @@ INSERT INTO users (nama,email,username,nip,jabatan,telepon,password,role,status_
  '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W','warga','menunggu_verifikasi',0,1);
 
 INSERT INTO warga (user_id,nik,no_kk,tempat_lahir,tanggal_lahir,jenis_kelamin,alamat,pekerjaan,telepon)
-SELECT id,'3201010101900001','3201010101900002','Bandung','1990-01-01','L',
-       'Jl. Melati No. 5 RT 02/RW 03, Sukamaju','Karyawan Swasta','081200000001'
+SELECT id,'3201010101900001','3201010101900002','Medan','1990-01-01','L',
+       'Jl. STM No. 5 RT 02/RW 03, Suka Maju, Medan Johor','Karyawan Swasta','081200000001'
 FROM users WHERE username='3201010101900001';
 
 INSERT INTO warga (user_id,nik,no_kk,tempat_lahir,tanggal_lahir,jenis_kelamin,alamat,pekerjaan,telepon)
-SELECT id,'3201010202950001','3201010202950002','Jakarta','1995-02-02','L',
-       'Jl. Mawar No. 12 RT 01/RW 04, Sukamaju','Wiraswasta','081200000002'
+SELECT id,'3201010202950001','3201010202950002','Medan','1995-02-02','L',
+       'Jl. Sakti Lubis No. 12 RT 01/RW 04, Suka Maju, Medan Johor','Wiraswasta','081200000002'
 FROM users WHERE username='3201010202950001';
 
 INSERT INTO jenis_surat (kode,nama,template,form_fields,aktif) VALUES
-('SKD','Surat Keterangan Domisili','Orang tersebut benar berdomisili di wilayah Kelurahan Sukamaju.',
+('SKD','Surat Keterangan Domisili','Orang tersebut benar berdomisili di wilayah Kelurahan Suka Maju.',
  '[{"name":"alamat_domisili","label":"Alamat Domisili"},{"name":"lama_tinggal","label":"Lama Tinggal"},{"name":"keperluan","label":"Keperluan"}]'::jsonb,1),
 ('SKTM','Surat Keterangan Tidak Mampu','Orang tersebut benar tergolong keluarga kurang mampu.',
  '[{"name":"penghasilan","label":"Penghasilan per Bulan"},{"name":"jumlah_tanggungan","label":"Jumlah Tanggungan"},{"name":"keperluan","label":"Keperluan"}]'::jsonb,1),
 ('SKCK','Surat Pengantar SKCK','Orang tersebut berkelakuan baik dan diberi pengantar untuk pengurusan SKCK.',
  '[{"name":"agama","label":"Agama"},{"name":"status_perkawinan","label":"Status Perkawinan"},{"name":"keperluan","label":"Keperluan"}]'::jsonb,1),
-('SKU','Surat Keterangan Usaha','Orang tersebut benar memiliki usaha di wilayah Kelurahan Sukamaju.',
+('SKU','Surat Keterangan Usaha','Orang tersebut benar memiliki usaha di wilayah Kelurahan Suka Maju.',
  '[{"name":"nama_usaha","label":"Nama Usaha"},{"name":"jenis_usaha","label":"Jenis Usaha"},{"name":"alamat_usaha","label":"Alamat Usaha"},{"name":"lama_usaha","label":"Lama Usaha"}]'::jsonb,1),
 ('SKLH','Surat Keterangan Kelahiran','Telah terjadi kelahiran sebagaimana data di atas.',
  '[{"name":"nama_bayi","label":"Nama Bayi"},{"name":"tempat_lahir_bayi","label":"Tempat Lahir Bayi"},{"name":"tanggal_lahir_bayi","label":"Tanggal Lahir Bayi"},{"name":"nama_ayah","label":"Nama Ayah"},{"name":"nama_ibu","label":"Nama Ibu"}]'::jsonb,1),
@@ -393,7 +393,7 @@ INSERT INTO persyaratan (jenis_surat_id,nama) VALUES
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'Pas Foto');
 
 INSERT INTO profil_desa (nama_desa, kecamatan, kabupaten_kota, provinsi, alamat, kode_pos, telepon, email, website, nama_lurah, nip_lurah, jabatan_lurah)
-VALUES ('Kelurahan Sukamaju', 'Kecamatan Contoh', 'Pemerintah Kota Contoh', 'Jawa Barat', 'Jl. Merdeka No. 1', '12345', '(021) 000-0000', 'kelurahan.sukamaju@pemkot.go.id', 'sukamaju.kelurahan.go.id', 'Drs. Hadi Purnomo, M.Si', '197503151998031004', 'Lurah Sukamaju')
+VALUES ('Kelurahan Suka Maju', 'Kecamatan Medan Johor', 'Pemerintah Kota Medan', 'Sumatera Utara', 'Jl. STM No. 40, Kelurahan Suka Maju', '20146', '0823-4123-5734', 'kelurahan@pemkomedan.go.id', 'sukamaju.medan.go.id', 'Muhammad Iqbal Samosir, S.E., M.A.P.', '198506122010011005', 'Lurah Suka Maju')
 ON CONFLICT (id) DO NOTHING;
 
 -- ================================================================

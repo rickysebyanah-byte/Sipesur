@@ -39,12 +39,12 @@ INSERT INTO users (nama, email, username, nip, jabatan, telepon, password, role,
   1
 ),
 (
-  'Drs. Hadi Purnomo, M.Si',
+  'Muhammad Iqbal Samosir, S.E., M.A.P.',
   'lurah@sipesur.test',
   'lurah',
-  '197503151998031004',
-  'Lurah Sukamaju',
-  '081234567892',
+  '198506122010011005',
+  'Lurah Suka Maju',
+  '0823-4123-5734',
   '$2a$10$fop9mOwiRNzSlxn31y5Hf.edXRoDUndD9IhVf5OhC8X3215F5QU2W',
   'lurah',
   'terverifikasi',
@@ -82,13 +82,13 @@ INSERT INTO users (nama, email, username, nip, jabatan, telepon, password, role,
 -- DATA WARGA
 -- ============================================================
 INSERT INTO warga (user_id, nik, no_kk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, pekerjaan, telepon)
-SELECT id, '3201010101900001', '3201010101900002', 'Bandung', '1990-01-01', 'L',
-  'Jl. Melati No. 5 RT 02/RW 03, Sukamaju', 'Karyawan Swasta', '081200000001'
+SELECT id, '3201010101900001', '3201010101900002', 'Medan', '1990-01-01', 'L',
+  'Jl. STM No. 15 RT 02/RW 03, Suka Maju, Medan Johor', 'Karyawan Swasta', '081200000001'
 FROM users WHERE username = '3201010101900001';
 
 INSERT INTO warga (user_id, nik, no_kk, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, pekerjaan, telepon)
-SELECT id, '3201010202950001', '3201010202950002', 'Jakarta', '1995-02-02', 'L',
-  'Jl. Mawar No. 12 RT 01/RW 04, Sukamaju', 'Wiraswasta', '081200000002'
+SELECT id, '3201010202950001', '3201010202950002', 'Medan', '1995-02-02', 'L',
+  'Jl. Sakti Lubis No. 12 RT 01/RW 04, Suka Maju, Medan Johor', 'Wiraswasta', '081200000002'
 FROM users WHERE username = '3201010202950001';
 
 -- ============================================================
@@ -98,7 +98,7 @@ FROM users WHERE username = '3201010202950001';
 -- SKD: Surat Keterangan Domisili
 INSERT INTO jenis_surat (kode, nama, template, form_fields, aktif) VALUES
 ('SKD', 'Surat Keterangan Domisili',
- 'Orang tersebut benar berdomisili di wilayah Kelurahan Sukamaju.',
+ 'Orang tersebut benar berdomisili di wilayah Kelurahan Suka Maju.',
  '[{"name":"alamat_domisili","label":"Alamat Domisili"},{"name":"lama_tinggal","label":"Lama Tinggal"},{"name":"keperluan","label":"Keperluan"}]'::jsonb,
  1);
 INSERT INTO persyaratan (jenis_surat_id, nama) VALUES
@@ -131,7 +131,7 @@ INSERT INTO persyaratan (jenis_surat_id, nama) VALUES
 -- SKU: Surat Keterangan Usaha
 INSERT INTO jenis_surat (kode, nama, template, form_fields, aktif) VALUES
 ('SKU', 'Surat Keterangan Usaha',
- 'Orang tersebut benar memiliki usaha di wilayah Kelurahan Sukamaju.',
+ 'Orang tersebut benar memiliki usaha di wilayah Kelurahan Suka Maju.',
  '[{"name":"nama_usaha","label":"Nama Usaha"},{"name":"jenis_usaha","label":"Jenis Usaha"},{"name":"alamat_usaha","label":"Alamat Usaha"},{"name":"lama_usaha","label":"Lama Usaha"}]'::jsonb,
  1);
 INSERT INTO persyaratan (jenis_surat_id, nama) VALUES

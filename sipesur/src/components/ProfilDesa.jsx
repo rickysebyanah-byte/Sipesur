@@ -202,10 +202,10 @@ export default function ProfilDesa({ userRole }) {
   }
 
   // Data pratinjau kop surat
-  const pemkab = (f?.kabupaten_kota || 'PEMERINTAH KOTA CONTOH').toUpperCase();
-  const namaDesa = (f?.nama_desa || 'KELURAHAN SUKAMAJU').toUpperCase();
-  const namaKec = (f?.kecamatan || 'KECAMATAN CONTOH').toUpperCase();
-  const alamatPrev = `${f?.alamat || 'Jl. Merdeka No. 1'}${f?.kode_pos ? ', Kode Pos: ' + f.kode_pos : ''}${f?.telepon ? '  •  Telp. ' + f.telepon : ''}`;
+  const pemkab = (f?.kabupaten_kota || 'PEMERINTAH KOTA MEDAN').toUpperCase();
+  const namaDesa = (f?.nama_desa || 'KELURAHAN SUKA MAJU').toUpperCase();
+  const namaKec = (f?.kecamatan || 'KECAMATAN MEDAN JOHOR').toUpperCase();
+  const alamatPrev = `${f?.alamat || 'Jl. STM No. 40'}${f?.kode_pos ? ', Kode Pos: ' + f.kode_pos : ''}${f?.telepon ? '  •  Telp. ' + f.telepon : ''}`;
   const kontakPrev = [f?.email && `Email: ${f.email}`, f?.website && `Website: ${f.website}`].filter(Boolean).join('  •  ');
 
   const TABS = [
@@ -329,37 +329,37 @@ export default function ProfilDesa({ userRole }) {
             accent="brand"
             locked={!bisaEdit}
           >
-            <InputField label="Pemerintah Kabupaten / Kota" required hint="Contoh: Pemerintah Kota Bandung">
+            <InputField label="Pemerintah Kabupaten / Kota" required hint="Contoh: Pemerintah Kota Medan">
               <input
                 type="text"
                 className="inp"
                 required={bisaEdit}
                 disabled={!bisaEdit}
-                placeholder="Pemerintah Kota Bandung / Pemerintah Kabupaten Bogor"
+                placeholder="Pemerintah Kota Medan"
                 value={f?.kabupaten_kota || ''}
                 onChange={ch('kabupaten_kota')}
               />
             </InputField>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputField label="Nama Kelurahan / Desa" required hint="Contoh: Kelurahan Sukamaju">
+              <InputField label="Nama Kelurahan / Desa" required hint="Contoh: Kelurahan Suka Maju">
                 <input
                   type="text"
                   className="inp"
                   required={bisaEdit}
                   disabled={!bisaEdit}
-                  placeholder="Kelurahan Sukamaju"
+                  placeholder="Kelurahan Suka Maju"
                   value={f?.nama_desa || ''}
                   onChange={ch('nama_desa')}
                 />
               </InputField>
-              <InputField label="Nama Kecamatan" required hint="Contoh: Kecamatan Coblong">
+              <InputField label="Nama Kecamatan" required hint="Contoh: Kecamatan Medan Johor">
                 <input
                   type="text"
                   className="inp"
                   required={bisaEdit}
                   disabled={!bisaEdit}
-                  placeholder="Kecamatan Coblong"
+                  placeholder="Kecamatan Medan Johor"
                   value={f?.kecamatan || ''}
                   onChange={ch('kecamatan')}
                 />
@@ -467,7 +467,7 @@ export default function ProfilDesa({ userRole }) {
                 rows={2}
                 className="inp"
                 disabled={!bisaEdit}
-                placeholder="Jl. Merdeka No. 1, RT 01/RW 01, Kelurahan Sukamaju"
+                placeholder="Jl. STM No. 40, Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan 20146"
                 value={f?.alamat || ''}
                 onChange={ch('alamat')}
               />
@@ -479,18 +479,18 @@ export default function ProfilDesa({ userRole }) {
                   type="text"
                   className="inp font-mono"
                   disabled={!bisaEdit}
-                  placeholder="40123"
+                  placeholder="20146"
                   maxLength={5}
                   value={f?.kode_pos || ''}
                   onChange={ch('kode_pos')}
                 />
               </InputField>
-              <InputField label="Nomor Telepon Kantor" hint="Termasuk kode area">
+              <InputField label="Nomor Telepon Kantor" hint="Nomor telepon dinas / HP">
                 <input
                   type="tel"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="(022) 123-4567"
+                  placeholder="0823-4123-5734"
                   value={f?.telepon || ''}
                   onChange={ch('telepon')}
                 />
@@ -503,7 +503,7 @@ export default function ProfilDesa({ userRole }) {
                   type="text"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="08123456789"
+                  placeholder="0823-4123-5734"
                   value={f?.fax || ''}
                   onChange={ch('fax')}
                 />
@@ -521,12 +521,12 @@ export default function ProfilDesa({ userRole }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputField label="Email Resmi Kelurahan" hint="Gunakan email resmi go.id">
+              <InputField label="Email Resmi Kelurahan" hint="Gunakan email resmi pemda">
                 <input
                   type="email"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="kelurahan.sukamaju@kotabandung.go.id"
+                  placeholder="kelurahan@pemkomedan.go.id"
                   value={f?.email || ''}
                   onChange={ch('email')}
                 />
@@ -536,7 +536,7 @@ export default function ProfilDesa({ userRole }) {
                   type="text"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="sukamaju.bandung.go.id"
+                  placeholder="sukamaju.medan.go.id"
                   value={f?.website || ''}
                   onChange={ch('website')}
                 />
@@ -548,7 +548,7 @@ export default function ProfilDesa({ userRole }) {
                 rows={2}
                 className="inp text-sm"
                 disabled={!bisaEdit}
-                placeholder="Contoh: Terwujudnya Kelurahan Sukamaju yang Maju, Sejahtera, dan Berdaya."
+                placeholder="Contoh: Terwujudnya Kelurahan Suka Maju yang Maju, Sejahtera, dan Berdaya."
                 value={f?.visi || ''}
                 onChange={ch('visi')}
               />
@@ -574,7 +574,7 @@ export default function ProfilDesa({ userRole }) {
                 type="text"
                 className="inp"
                 disabled={!bisaEdit}
-                placeholder="Drs. Hadi Purnomo, M.Si"
+                placeholder="Muhammad Iqbal Samosir, S.E., M.A.P."
                 value={f?.nama_lurah || ''}
                 onChange={ch('nama_lurah')}
               />
@@ -586,7 +586,7 @@ export default function ProfilDesa({ userRole }) {
                   type="text"
                   className="inp font-mono tracking-wider"
                   disabled={!bisaEdit}
-                  placeholder="197503151998031004"
+                  placeholder="198506122010011005"
                   maxLength={18}
                   value={f?.nip_lurah || ''}
                   onChange={ch('nip_lurah')}
@@ -597,7 +597,7 @@ export default function ProfilDesa({ userRole }) {
                   type="text"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="Lurah Sukamaju / Plt. Lurah / Kepala Desa"
+                  placeholder="Lurah Suka Maju"
                   value={f?.jabatan_lurah || ''}
                   onChange={ch('jabatan_lurah')}
                 />
@@ -625,12 +625,12 @@ export default function ProfilDesa({ userRole }) {
               </InputField>
             </div>
 
-            <InputField label="Sekretaris Kelurahan / Desa" hint="Nama & gelar Sekretaris (opsional)">
+            <InputField label="Sekretaris Kelurahan (Seklur)" hint="Nama & gelar Sekretaris">
               <input
                 type="text"
                 className="inp"
                 disabled={!bisaEdit}
-                placeholder="Contoh: Dra. Sri Mulyani, M.AP"
+                placeholder="Vicky Al Wirya, S.Pt., M.M."
                 value={f?.nama_sekretaris || ''}
                 onChange={ch('nama_sekretaris')}
               />
@@ -649,19 +649,19 @@ export default function ProfilDesa({ userRole }) {
           >
             <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100">
               <iframe
-                title="Peta Lokasi Kantor"
+                title="Peta Lokasi Kantor Kelurahan Suka Maju Medan Johor"
                 className="w-full h-80 border-0"
-                src="https://www.openstreetmap.org/export/embed.html?bbox=107.590%2C-6.930%2C107.630%2C-6.890&amp;layer=mapnik&amp;marker=-6.9147%2C107.6098"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=98.67%2C3.52%2C98.71%2C3.56&amp;layer=mapnik&amp;marker=3.5414%2C98.6923"
               />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
               <div>
-                <div className="font-bold text-slate-800 text-sm">📍 {f?.nama_desa || 'Kelurahan Sukamaju'}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{f?.alamat || 'Jl. Raya Sukamaju No. 12'}, {f?.kabupaten_kota || 'Pemerintah Kota Bandung'}</div>
+                <div className="font-bold text-slate-800 text-sm">📍 {f?.nama_desa || 'Kelurahan Suka Maju'}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{f?.alamat || 'Jl. STM No. 40, Kelurahan Suka Maju, Kecamatan Medan Johor'}, {f?.kabupaten_kota || 'Pemerintah Kota Medan'}</div>
               </div>
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((f?.nama_desa || 'Kelurahan Sukamaju') + ' ' + (f?.alamat || 'Bandung'))}`}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Kantor Kelurahan Suka Maju Jl. STM No. 40 Medan Johor')}`}
                 target="_blank"
                 rel="noreferrer"
                 className="btn btn-p text-xs py-2 px-4 flex items-center gap-2 flex-shrink-0"
@@ -672,22 +672,22 @@ export default function ProfilDesa({ userRole }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputField label="Koordinat Latitude (Lintang)" hint="Contoh: -6.914744">
+              <InputField label="Koordinat Latitude (Lintang)" hint="Contoh: 3.541420">
                 <input
                   type="text"
                   className="inp font-mono"
                   disabled={!bisaEdit}
-                  placeholder="-6.914744"
+                  placeholder="3.541420"
                   value={f?.latitude || ''}
                   onChange={ch('latitude')}
                 />
               </InputField>
-              <InputField label="Koordinat Longitude (Bujur)" hint="Contoh: 107.609810">
+              <InputField label="Koordinat Longitude (Bujur)" hint="Contoh: 98.692310">
                 <input
                   type="text"
                   className="inp font-mono"
                   disabled={!bisaEdit}
-                  placeholder="107.609810"
+                  placeholder="98.692310"
                   value={f?.longitude || ''}
                   onChange={ch('longitude')}
                 />
@@ -698,7 +698,7 @@ export default function ProfilDesa({ userRole }) {
                 rows={2}
                 className="inp text-xs"
                 disabled={!bisaEdit}
-                placeholder="Dari perempatan jalan utama belok kiri 200m, kantor kelurahan berada tepat di seberang puskesmas."
+                placeholder="Kantor Kelurahan Suka Maju berlokasi di Jl. STM No. 40 Medan Johor, mudah diakses kendaraan roda 2 dan roda 4."
                 value={f?.petunjuk_arah || ''}
                 onChange={ch('petunjuk_arah')}
               />

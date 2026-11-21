@@ -154,19 +154,19 @@ CREATE TABLE surat (
 -- 10. Tabel profil desa & kop surat dinamis
 CREATE TABLE profil_desa (
   id SERIAL PRIMARY KEY,
-  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Sukamaju',
-  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Contoh',
-  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Contoh',
-  provinsi VARCHAR(100) NOT NULL DEFAULT 'Jawa Barat',
-  alamat TEXT NOT NULL DEFAULT 'Jl. Merdeka No. 1',
-  kode_pos VARCHAR(10) NOT NULL DEFAULT '12345',
-  telepon VARCHAR(30) NOT NULL DEFAULT '(021) 000-0000',
-  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan.sukamaju@pemkot.go.id',
-  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.kelurahan.go.id',
+  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Suka Maju',
+  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Medan Johor',
+  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Medan',
+  provinsi VARCHAR(100) NOT NULL DEFAULT 'Sumatera Utara',
+  alamat TEXT NOT NULL DEFAULT 'Jl. STM No. 40, Kelurahan Suka Maju',
+  kode_pos VARCHAR(10) NOT NULL DEFAULT '20146',
+  telepon VARCHAR(30) NOT NULL DEFAULT '0823-4123-5734',
+  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan@pemkomedan.go.id',
+  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.medan.go.id',
   logo_url TEXT,
-  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Drs. Hadi Purnomo, M.Si',
-  nip_lurah VARCHAR(30) NOT NULL DEFAULT '197503151998031004',
-  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Sukamaju',
+  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+  nip_lurah VARCHAR(30) NOT NULL DEFAULT '198506122010011005',
+  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Suka Maju',
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 

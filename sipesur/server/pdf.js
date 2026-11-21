@@ -63,19 +63,19 @@ export async function buatPdf(opts, file) {
     data = {},
     warga = {},
     kop = {},
-    lurah = 'Drs. Hadi Purnomo, M.Si',
-    nip = '197503151998031004',
-    jabatan = 'Lurah',
+    lurah = 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+    nip = '198506122010011005',
+    jabatan = 'Lurah Suka Maju',
     tanda_tangan = null,
     url,
     tanggal,
   } = opts;
 
   // Nama daerah dinamis dari Profil Desa
-  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Contoh').toUpperCase();
-  const namaDesa = (kop.nama_desa || 'Kelurahan Sukamaju').toUpperCase();
-  const namaKec = (kop.kecamatan || 'Kecamatan Contoh').toUpperCase();
-  const alamatLengkap = `${kop.alamat || 'Jl. Merdeka No. 1'}, Telp. ${kop.telepon || '(021) 000-0000'} • Kode Pos: ${kop.kode_pos || '12345'}`;
+  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Medan').toUpperCase();
+  const namaDesa = (kop.nama_desa || 'Kelurahan Suka Maju').toUpperCase();
+  const namaKec = (kop.kecamatan || 'Kecamatan Medan Johor').toUpperCase();
+  const alamatLengkap = `${kop.alamat || 'Jl. STM No. 40, Medan Johor'}, Telp. ${kop.telepon || '0823-4123-5734'} • Kode Pos: ${kop.kode_pos || '20146'}`;
   const infoKontak = [
     kop.email ? `Email: ${kop.email}` : '',
     kop.website ? `Website: ${kop.website}` : '',
@@ -145,7 +145,7 @@ export async function buatPdf(opts, file) {
   // ----------------------------------------------------------------
   doc.moveDown(1.5);
   doc.font('Helvetica').fontSize(10.5).text(
-    `Yang bertanda tangan di bawah ini, ${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'}, ${kop.kecamatan || 'Kecamatan Contoh'}, ${kop.kabupaten_kota || 'Kota Contoh'}, dengan ini menerangkan bahwa:`,
+    `Yang bertanda tangan di bawah ini, ${jabatan} ${kop.nama_desa || 'Kelurahan Suka Maju'}, ${kop.kecamatan || 'Kecamatan Medan Johor'}, ${kop.kabupaten_kota || 'Kota Medan'}, dengan ini menerangkan bahwa:`,
     L,
     doc.y,
     { width: W, align: 'justify' }
@@ -213,7 +213,7 @@ export async function buatPdf(opts, file) {
 
   const bodyText = (template && template.trim())
     ? template.trim()
-    : (TEMPLATE_DEFAULT[kode] || `adalah benar warga ${kop.nama_desa || 'Kelurahan Sukamaju'}.`);
+    : (TEMPLATE_DEFAULT[kode] || `adalah benar warga ${kop.nama_desa || 'Kelurahan Suka Maju'}.`);
 
   doc.font('Helvetica').fontSize(10.5).text(
     `Demikian bahwa yang bersangkutan ${bodyText}`,
@@ -256,10 +256,10 @@ export async function buatPdf(opts, file) {
   // Area tanda tangan (kanan bawah)
   const sigX = 330;
   const sigW = 205;
-  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Sukamaju'}, ${tanggal}`;
+  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Suka Maju'}, ${tanggal}`;
 
   doc.font('Helvetica').fontSize(10.5).fillColor('#000000').text(lokasiTgl, sigX, sigY, { width: sigW, align: 'center' });
-  doc.font('Helvetica').fontSize(10.5).text(`${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'}`, sigX, doc.y + 2, { width: sigW, align: 'center' });
+  doc.font('Helvetica').fontSize(10.5).text(`${jabatan} ${kop.nama_desa || 'Kelurahan Suka Maju'}`, sigX, doc.y + 2, { width: sigW, align: 'center' });
 
   // TANDA TANGAN ASLI LURAH (Beda orang beda tanda tangan)
   const ttdTopY = doc.y + 4;
@@ -307,7 +307,7 @@ export async function buatPdf(opts, file) {
   const footerY = doc.page.height - 40;
   doc.moveTo(L, footerY - 6).lineTo(R, footerY - 6).lineWidth(0.5).stroke();
   doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(
-    `${kop.nama_desa || 'Kelurahan Sukamaju'} • ${alamatLengkap}`,
+    `${kop.nama_desa || 'Kelurahan Suka Maju'} • ${alamatLengkap}`,
     L,
     footerY,
     { width: W, align: 'center' }
@@ -331,16 +331,16 @@ export async function buatPdfSuratDinas(opts, file) {
     isi,
     tanggal,
     kop = {},
-    lurah = 'Drs. Hadi Purnomo, M.Si',
-    nip = '197503151998031004',
-    jabatan = 'Lurah',
+    lurah = 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+    nip = '198506122010011005',
+    jabatan = 'Lurah Suka Maju',
     tanda_tangan = null,
   } = opts;
 
-  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Contoh').toUpperCase();
-  const namaDesa = (kop.nama_desa || 'Kelurahan Sukamaju').toUpperCase();
-  const namaKec = (kop.kecamatan || 'Kecamatan Contoh').toUpperCase();
-  const alamatLengkap = `${kop.alamat || 'Jl. Merdeka No. 1'}, Telp. ${kop.telepon || '(021) 000-0000'} • Kode Pos: ${kop.kode_pos || '12345'}`;
+  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Medan').toUpperCase();
+  const namaDesa = (kop.nama_desa || 'Kelurahan Suka Maju').toUpperCase();
+  const namaKec = (kop.kecamatan || 'Kecamatan Medan Johor').toUpperCase();
+  const alamatLengkap = `${kop.alamat || 'Jl. STM No. 40, Medan Johor'}, Telp. ${kop.telepon || '0823-4123-5734'} • Kode Pos: ${kop.kode_pos || '20146'}`;
 
   const doc = new PDFDocument({ size: 'A4', margin: 60, bufferPages: true });
   const stream = fs.createWriteStream(file);
@@ -371,7 +371,7 @@ export async function buatPdfSuratDinas(opts, file) {
   // Tanggal & Nomor Surat
   doc.moveDown(1.5);
   const startY = doc.y;
-  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Sukamaju'}, ${tanggal}`;
+  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Suka Maju'}, ${tanggal}`;
 
   doc.font('Helvetica').fontSize(10);
   doc.text(`Nomor     : ${nomor}`, L, startY);
@@ -404,7 +404,7 @@ export async function buatPdfSuratDinas(opts, file) {
   if (doc.y > 640) doc.addPage();
   const sigX = 330;
   const sigW = 205;
-  doc.text(`${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'},`, sigX, doc.y, { width: sigW, align: 'center' });
+  doc.text(`${jabatan} ${kop.nama_desa || 'Kelurahan Suka Maju'},`, sigX, doc.y, { width: sigW, align: 'center' });
 
   const sigBuffer = parseBase64Image(tanda_tangan);
   const ttdTopY = doc.y + 4;

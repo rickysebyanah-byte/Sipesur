@@ -13,9 +13,13 @@ import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
-const DATA_DIR = process.env.VERCEL ? '/tmp/sipesur' : process.cwd();
+const DATA_DIR = process.env.VERCEL ? '/tmp/sipesur' : path.resolve(__dirname, '..');
 const LOCAL_DB_PATH = path.join(DATA_DIR, 'storage', 'local_db.json');
 
 // ----------------------------------------------------------------
@@ -30,19 +34,19 @@ function getDefaultData() {
     profil_desa: [
       {
         id: 1,
-        nama_desa: 'Kelurahan Sukamaju',
-        kecamatan: 'Kecamatan Contoh',
-        kabupaten_kota: 'Pemerintah Kota Contoh',
-        provinsi: 'Jawa Barat',
-        alamat: 'Jl. Merdeka No. 1, Kelurahan Sukamaju',
-        kode_pos: '12345',
-        telepon: '(021) 000-0000',
-        email: 'kelurahan.sukamaju@pemkot.go.id',
-        website: 'sukamaju.kelurahan.go.id',
+        nama_desa: 'Kelurahan Suka Maju',
+        kecamatan: 'Kecamatan Medan Johor',
+        kabupaten_kota: 'Pemerintah Kota Medan',
+        provinsi: 'Sumatera Utara',
+        alamat: 'Jl. STM No. 40, Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan',
+        kode_pos: '20146',
+        telepon: '0823-4123-5734',
+        email: 'kelurahan@pemkomedan.go.id',
+        website: 'sukamaju.medan.go.id',
         logo_url: null,
-        nama_lurah: 'Drs. Hadi Purnomo, M.Si',
-        nip_lurah: '197503151998031004',
-        jabatan_lurah: 'Lurah Sukamaju',
+        nama_lurah: 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip_lurah: '198506122010011005',
+        jabatan_lurah: 'Lurah Suka Maju',
         updated_at: new Date().toISOString(),
       },
     ],
@@ -83,12 +87,12 @@ function getDefaultData() {
       },
       {
         id: 3,
-        nama: 'Drs. Hadi Purnomo, M.Si',
+        nama: 'Muhammad Iqbal Samosir, S.E., M.A.P.',
         email: 'lurah@sipesur.test',
         username: 'lurah',
-        nip: '197503151998031004',
-        jabatan: 'Lurah Sukamaju',
-        telepon: '081234567892',
+        nip: '198506122010011005',
+        jabatan: 'Lurah Suka Maju',
+        telepon: '0823-4123-5734',
         password: pw,
         role: 'lurah',
         status_verifikasi: 'terverifikasi',
@@ -139,10 +143,10 @@ function getDefaultData() {
         user_id: 4,
         nik: '3201010101900001',
         no_kk: '3201010101900002',
-        tempat_lahir: 'Bandung',
+        tempat_lahir: 'Medan',
         tanggal_lahir: '1990-01-01',
         jenis_kelamin: 'L',
-        alamat: 'Jl. Melati No. 5 RT 02/RW 03, Sukamaju',
+        alamat: 'Jl. STM No. 15 RT 02/RW 03, Suka Maju, Medan Johor',
         pekerjaan: 'Karyawan Swasta',
         telepon: '081200000001',
       },
@@ -151,19 +155,19 @@ function getDefaultData() {
         user_id: 5,
         nik: '3201010202950001',
         no_kk: '3201010202950002',
-        tempat_lahir: 'Jakarta',
+        tempat_lahir: 'Medan',
         tanggal_lahir: '1995-02-02',
         jenis_kelamin: 'L',
-        alamat: 'Jl. Mawar No. 12 RT 01/RW 04, Sukamaju',
+        alamat: 'Jl. Sakti Lubis No. 12 RT 01/RW 04, Suka Maju, Medan Johor',
         pekerjaan: 'Wiraswasta',
         telepon: '081200000002',
       },
     ],
     jenis_surat: [
-      { id: 1, kode: 'SKD', nama: 'Surat Keterangan Domisili', template: 'Orang tersebut benar berdomisili di wilayah Kelurahan Sukamaju.', form_fields: [{ name: 'alamat_domisili', label: 'Alamat Domisili' }, { name: 'lama_tinggal', label: 'Lama Tinggal' }, { name: 'keperluan', label: 'Keperluan' }], aktif: 1 },
+      { id: 1, kode: 'SKD', nama: 'Surat Keterangan Domisili', template: 'Orang tersebut benar berdomisili di wilayah Kelurahan Suka Maju.', form_fields: [{ name: 'alamat_domisili', label: 'Alamat Domisili' }, { name: 'lama_tinggal', label: 'Lama Tinggal' }, { name: 'keperluan', label: 'Keperluan' }], aktif: 1 },
       { id: 2, kode: 'SKTM', nama: 'Surat Keterangan Tidak Mampu', template: 'Orang tersebut benar tergolong keluarga kurang mampu.', form_fields: [{ name: 'penghasilan', label: 'Penghasilan per Bulan' }, { name: 'jumlah_tanggungan', label: 'Jumlah Tanggungan' }, { name: 'keperluan', label: 'Keperluan' }], aktif: 1 },
       { id: 3, kode: 'SKCK', nama: 'Surat Pengantar SKCK', template: 'Orang tersebut berkelakuan baik dan diberi pengantar untuk pengurusan SKCK.', form_fields: [{ name: 'agama', label: 'Agama' }, { name: 'status_perkawinan', label: 'Status Perkawinan' }, { name: 'keperluan', label: 'Keperluan' }], aktif: 1 },
-      { id: 4, kode: 'SKU', nama: 'Surat Keterangan Usaha', template: 'Orang tersebut benar memiliki usaha di wilayah Kelurahan Sukamaju.', form_fields: [{ name: 'nama_usaha', label: 'Nama Usaha' }, { name: 'jenis_usaha', label: 'Jenis Usaha' }, { name: 'alamat_usaha', label: 'Alamat Usaha' }, { name: 'lama_usaha', label: 'Lama Usaha' }], aktif: 1 },
+      { id: 4, kode: 'SKU', nama: 'Surat Keterangan Usaha', template: 'Orang tersebut benar memiliki usaha di wilayah Kelurahan Suka Maju.', form_fields: [{ name: 'nama_usaha', label: 'Nama Usaha' }, { name: 'jenis_usaha', label: 'Jenis Usaha' }, { name: 'alamat_usaha', label: 'Alamat Usaha' }, { name: 'lama_usaha', label: 'Lama Usaha' }], aktif: 1 },
       { id: 5, kode: 'SKLH', nama: 'Surat Keterangan Kelahiran', template: 'Telah terjadi kelahiran sebagaimana data di atas.', form_fields: [{ name: 'nama_bayi', label: 'Nama Bayi' }, { name: 'tempat_lahir_bayi', label: 'Tempat Lahir Bayi' }, { name: 'tanggal_lahir_bayi', label: 'Tanggal Lahir Bayi' }, { name: 'nama_ayah', label: 'Nama Ayah' }, { name: 'nama_ibu', label: 'Nama Ibu' }], aktif: 1 },
       { id: 6, kode: 'SKM', nama: 'Surat Keterangan Kematian', template: 'Telah terjadi kematian sebagaimana data di atas.', form_fields: [{ name: 'nama_almarhum', label: 'Nama Almarhum' }, { name: 'nik_almarhum', label: 'NIK Almarhum' }, { name: 'tanggal_meninggal', label: 'Tanggal Meninggal' }, { name: 'penyebab', label: 'Penyebab' }, { name: 'hubungan_pelapor', label: 'Hubungan Pelapor' }], aktif: 1 },
       { id: 7, kode: 'SKBM', nama: 'Surat Keterangan Belum Menikah', template: 'Orang tersebut sampai saat ini belum pernah menikah.', form_fields: [{ name: 'agama', label: 'Agama' }, { name: 'keperluan', label: 'Keperluan' }], aktif: 1 },
@@ -192,26 +196,26 @@ function getDefaultData() {
     berita: [
       {
         id: 1,
-        judul: 'Peluncuran Layanan Surat Online SIPESUR',
-        isi: 'Kelurahan Sukamaju resmi meluncurkan sistem layanan surat administrasi kependudukan daring demi mempermudah warga mengurus surat dari rumah tanpa antre.',
-        kategori: 'Pengumuman',
+        judul: 'Pelantikan & Program Kerja Lurah Suka Maju Kecamatan Medan Johor',
+        isi: 'Lurah Suka Maju, Muhammad Iqbal Samosir, S.E., M.A.P., bersama Sekretaris Lurah Vicky Al Wirya, S.Pt., M.M. menegaskan komitmen peningkatan pelayanan publik digital, kebersihan lingkungan, dan ketertiban administrasi kependudukan di wilayah Medan Johor.',
+        kategori: 'Kegiatan',
         tanggal: '2026-11-15',
-        penulis_id: 1,
+        penulis_id: 3,
         created_at: '2026-11-15T08:00:00.000Z',
       },
       {
         id: 2,
-        judul: 'Jam Layanan Loket Khusus Menjelang Akhir Tahun',
-        isi: 'Menyambut penutupan tahun anggaran 2026, loket pelayanan tatap muka di kantor kelurahan dibuka pukul 08.00 - 15.00 WIB setiap hari kerja.',
-        kategori: 'Info Layanan',
+        judul: 'Peluncuran Layanan Surat Online SIPESUR Kelurahan Suka Maju',
+        isi: 'Warga Kelurahan Suka Maju, Kec. Medan Johor kini dapat mengurus surat keterangan resmi secara online 24 jam tanpa antre di kantor kelurahan melalui portal digital SIPESUR.',
+        kategori: 'Pengumuman',
         tanggal: '2026-11-10',
         penulis_id: 1,
         created_at: '2026-11-10T08:00:00.000Z',
       },
       {
         id: 3,
-        judul: 'Pemutakhiran Data Kependudukan & BLT Lingkungan',
-        isi: 'Bagi seluruh warga yang mengalami perubahan data KK, domisili, atau status keluarga dihimbau memperbarui berkas di kantor kelurahan sebelum 31 Desember.',
+        judul: 'Himbauan Pemutakhiran Data Kependudukan & Layanan Loket Jl. STM',
+        isi: 'Dihimbau kepada seluruh warga Suka Maju untuk memperbarui berkas administrasi KK dan KTP di Kantor Kelurahan Jl. STM No. 40 Medan Johor pada jam operasional kerja.',
         kategori: 'Himbauan',
         tanggal: '2026-11-05',
         penulis_id: 1,
@@ -221,49 +225,49 @@ function getDefaultData() {
     umkm: [
       {
         id: 1,
-        nama: 'Warung Makan Bu Tini',
+        nama: 'Warung Kopi & Sarapan Pagi Bu Tini',
         jenis: 'Kuliner',
-        alamat: 'Jl. Sukamaju No. 45 RT 02/03',
+        alamat: 'Jl. STM No. 40 RT 02/03, Suka Maju',
         telepon: '0812-3456-7890',
-        deskripsi: 'Menyediakan masakan khas nusantara dan katering hajatan',
+        deskripsi: 'Menyediakan lontong Medan, kopi sidikalang, dan sarapan pagi khas',
       },
       {
         id: 2,
-        nama: 'Toko Bangunan Maju Jaya',
+        nama: 'Toko Bangunan Maju Jaya Medan',
         jenis: 'Material & Konstruksi',
-        alamat: 'Jl. Pahlawan No. 12 RT 01/05',
+        alamat: 'Jl. STM No. 12 RT 01/05, Suka Maju',
         telepon: '0813-5678-9012',
-        deskripsi: 'Bahan bangunan lengkap dan melayani antar tempat',
+        deskripsi: 'Bahan bangunan lengkap dan melayani antar tempat se-Medan Johor',
       },
       {
         id: 3,
-        nama: 'Jasa Laundry Kilat Bersih',
+        nama: 'Jasa Laundry Kilat Bersih STM',
         jenis: 'Jasa & Kebersihan',
-        alamat: 'Gang Mawar No. 7 RT 04/02',
+        alamat: 'Jl. Sakti Lubis No. 7 RT 04/02, Suka Maju',
         telepon: '0821-9876-5432',
         deskripsi: 'Cuci setrika ekspres 1 hari selesai higienis dan harum',
       },
       {
         id: 4,
-        nama: 'Konveksi Batik Sukamaju',
+        nama: 'Konveksi Bordir & Songket Suka Maju',
         jenis: 'Tekstil & Pakaian',
-        alamat: 'Jl. Industri No. 3 RT 03/01',
+        alamat: 'Jl. Suka Cerdas No. 3 RT 03/01, Suka Maju',
         telepon: '0858-1234-5678',
-        deskripsi: 'Pakaian batik khas kelurahan dan seragam instansi',
+        deskripsi: 'Pakaian batik khas Melayu Deli, songket, dan seragam instansi',
       },
       {
         id: 5,
-        nama: 'Apotek Sehat Mandiri',
+        nama: 'Apotek Sehat Mandiri Johor',
         jenis: 'Kesehatan & Obat',
-        alamat: 'Jl. Sukamaju No. 88 RT 02/04',
+        alamat: 'Jl. STM No. 88 RT 02/04, Suka Maju',
         telepon: '0877-2233-4455',
         deskripsi: 'Obat generik dan vitamin bersertifikasi BPOM',
       },
       {
         id: 6,
-        nama: 'Studio Foto Kenangan Indah',
+        nama: 'Studio Foto & Percetakan Digital STM',
         jenis: 'Jasa Kreatif',
-        alamat: 'Jl. Merdeka No. 20 RT 05/03',
+        alamat: 'Jl. STM No. 20 RT 05/03, Suka Maju',
         telepon: '0831-6677-8899',
         deskripsi: 'Foto dokumen KTP, ijazah, pernikahan, dan cetak kilat',
       },
@@ -648,23 +652,29 @@ function executeLocalSql(sql, params = []) {
 
   // 10. CEK STATUS PUBLIK
   if (upper.includes('FROM PENGAJUAN P') && upper.includes('JOIN JENIS_SURAT')) {
-    const kode = String(params[0] || params[1] || '').trim().toUpperCase();
-    const idNum = Number(kode);
+    const idVal = Number(params[0]);
+    const kode1 = String(params[1] || '').trim().toUpperCase();
+    const kode2 = String(params[2] || kode1).trim().toUpperCase();
     const p = (dbData.pengajuan || []).find((item) =>
-      (!isNaN(idNum) && item.id === idNum) ||
-      String(item.nomor_surat || '').toUpperCase() === kode
+      (!isNaN(idVal) && idVal > 0 && item.id === idVal) ||
+      (kode1 && String(item.kode || '').toUpperCase() === kode1) ||
+      (kode2 && String(item.kode || '').toUpperCase() === kode2) ||
+      (kode2 && String(item.nomor_surat || '').toUpperCase() === kode2)
     );
     if (p) {
       const js = (dbData.jenis_surat || []).find((j) => j.id === p.jenis_surat_id);
       const u = (dbData.users || []).find((usr) => usr.id === p.user_id);
+      const s = (dbData.surat || []).find((srt) => srt.pengajuan_id === p.id);
       return [{
         id: p.id,
+        kode: p.kode,
         status: p.status,
         created_at: p.created_at,
         updated_at: p.updated_at,
-        catatan_petugas: p.catatan_petugas || null,
+        catatan: p.catatan || p.catatan_petugas || null,
+        nomor_surat: s?.nomor || null,
         jenis_surat: js?.nama || 'Surat Keterangan Kelurahan',
-        nama_pemohon: u?.nama || 'Warga Sukamaju',
+        nama_pemohon: u?.nama || 'Warga Suka Maju',
       }];
     }
     return [];
