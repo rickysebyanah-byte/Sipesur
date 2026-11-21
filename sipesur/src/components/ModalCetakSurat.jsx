@@ -27,16 +27,23 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
 
   const [tab, setTab] = useState(canEdit ? 'editor' : 'preview');
 
-  // ── Data kop surat ──
-  const pemkab     = (kop.kabupaten_kota || 'PEMERINTAH KOTA MEDAN').toUpperCase();
-  const namaDesa   = (kop.nama_desa      || 'KELURAHAN SUKA MAJU').toUpperCase();
-  const namaKec    = (kop.kecamatan      || 'KECAMATAN MEDAN JOHOR').toUpperCase();
-  const alamatKop  = `${kop.alamat || 'Jl. STM No. 40'}, Telp. ${kop.telepon || '0823-4123-5734'} \u2022 Kode Pos: ${kop.kode_pos || '20146'}`;
-  const kontakKop  = [kop.email && `Email: ${kop.email}`, kop.website && `Website: ${kop.website}`].filter(Boolean).join(' \u2022 ');
+  // ── Data kop surat & sanitasi nilai mock lama ──
+  const isOld = (s) => !s || /merdeka|contoh|sukamaju(?!\.medan)|\(021\)|12345/i.test(String(s));
+  const pemkab     = (!isOld(kop.kabupaten_kota) ? kop.kabupaten_kota : 'PEMERINTAH KOTA MEDAN').toUpperCase();
+  const namaDesa   = (!isOld(kop.nama_desa) ? kop.nama_desa : 'KELURAHAN SUKA MAJU').toUpperCase();
+  const namaKec    = (!isOld(kop.kecamatan) ? kop.kecamatan : 'KECAMATAN MEDAN JOHOR').toUpperCase();
+  const alamatDesa = !isOld(kop.alamat) ? kop.alamat : 'Jl. STM No. 40, Kelurahan Suka Maju';
+  const telpDesa   = !isOld(kop.telepon) ? kop.telepon : '0823-4123-5734';
+  const kodePosDesa= !isOld(kop.kode_pos) ? kop.kode_pos : '20146';
+  const alamatKop  = `${alamatDesa}, Telp. ${telpDesa} • Kode Pos: ${kodePosDesa}`;
+  const kontakKop  = [
+    (!isOld(kop.email) ? kop.email : 'kelurahan@pemkomedan.go.id') && `Email: ${!isOld(kop.email) ? kop.email : 'kelurahan@pemkomedan.go.id'}`,
+    (!isOld(kop.website) ? kop.website : 'sukamaju.medan.go.id') && `Website: ${!isOld(kop.website) ? kop.website : 'sukamaju.medan.go.id'}`
+  ].filter(Boolean).join(' • ');
 
   // ── Data penandatangan ──
-  const lurahNama    = surat.lurah_nama || kop.nama_lurah    || 'Muhammad Iqbal Samosir, S.E., M.A.P.';
-  const lurahNip     = surat.lurah_nip  || kop.nip_lurah     || '198506122010011005';
+  const lurahNama    = (!isOld(surat.lurah_nama) && surat.lurah_nama) || (!isOld(kop.nama_lurah) && kop.nama_lurah) || 'Muhammad Iqbal Samosir, S.E., M.A.P.';
+  const lurahNip     = (!isOld(surat.lurah_nip) && surat.lurah_nip) || (!isOld(kop.nip_lurah) && kop.nip_lurah) || '198506122010011005';
   const lurahJabatan = kop.jabatan_lurah || 'Lurah Suka Maju';
   const lurahTtd     = surat.tanda_tangan || null;
 
@@ -44,7 +51,8 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
   const tanggalTerbit = surat.terbit_at
     ? new Date(surat.terbit_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-  const lokasiTgl = `${(kop.nama_desa || 'Suka Maju').replace(/^(kelurahan|desa)\s+/i, '')}, ${tanggalTerbit}`;
+  const namaLokasi = namaDesa ? namaDesa.replace(/^(KELURAHAN|DESA)\s+/i, '') : 'Suka Maju';
+  const lokasiTgl = `${namaLokasi}, ${tanggalTerbit}`;
 
   // ── Form fields ──
   const formFields = Array.isArray(p.form_fields) ? p.form_fields : [];
@@ -118,45 +126,45 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
     downloadPdf(`/pengajuan/${p.id}/surat`, `Surat-${(nomorSurat || surat.nomor || p.kode || 'surat').replace(/[/\\?%*:|"<>]/g, '_')}.pdf`);
   };
 
-  // ── PRATINJAU SURAT A4 RESMI ──
+  // ── PRATINJAU SURAT A4 RESMI (PAS 1 LEMBAR A4) ──
   const SuratA4 = () => (
     <div
       id="sipesur-print-area"
-      className="printable-document mx-auto w-full max-w-[210mm] min-h-[297mm] rounded-sm bg-white p-10 sm:p-14 text-slate-950 shadow-lg border border-slate-300 font-serif text-[11pt] leading-relaxed"
+      className="printable-document mx-auto w-full max-w-[210mm] min-h-0 rounded-sm bg-white p-6 sm:p-8 text-slate-950 shadow-lg border border-slate-300 font-serif text-[10pt] leading-snug"
     >
       {/* 1. KOP SURAT */}
-      <div className="relative border-b-[3px] border-double border-slate-900 pb-3 mb-6">
+      <div className="relative border-b-[3px] border-double border-slate-900 pb-2 mb-3">
         <div className="flex items-center gap-4">
           {kop.logo_url && (
-            <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center">
-              <img src={kop.logo_url} alt="Logo Daerah" className="max-h-20 max-w-20 object-contain" />
+            <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
+              <img src={kop.logo_url} alt="Logo Daerah" className="max-h-16 max-w-16 object-contain" />
             </div>
           )}
           <div className={`flex-1 text-center ${!kop.logo_url ? 'w-full' : ''}`}>
-            <div className="font-sans text-[12pt] font-bold tracking-wider leading-snug">{pemkab}</div>
-            <div className="font-sans text-[14pt] font-extrabold tracking-wider leading-snug">{namaDesa}</div>
-            <div className="font-sans text-[11pt] font-bold tracking-wider leading-snug">{namaKec}</div>
-            <div className="font-sans text-[9pt] font-normal leading-tight mt-1 text-slate-800">{alamatKop}</div>
-            {kontakKop && <div className="font-sans text-[8.5pt] text-slate-700 leading-tight mt-0.5">{kontakKop}</div>}
+            <div className="font-sans text-[11pt] font-bold tracking-wider leading-tight">{pemkab}</div>
+            <div className="font-sans text-[13pt] font-extrabold tracking-wider leading-tight">{namaDesa}</div>
+            <div className="font-sans text-[10pt] font-bold tracking-wider leading-tight">{namaKec}</div>
+            <div className="font-sans text-[8.5pt] font-normal leading-tight mt-0.5 text-slate-800">{alamatKop}</div>
+            {kontakKop && <div className="font-sans text-[8pt] text-slate-700 leading-tight mt-0.5">{kontakKop}</div>}
           </div>
         </div>
       </div>
 
       {/* 2. JUDUL & NOMOR */}
-      <div className="text-center my-6">
-        <h2 className="font-serif text-[13pt] font-bold uppercase underline tracking-wide">{judulSurat}</h2>
-        <div className="font-sans text-[10pt] font-medium text-slate-800 mt-1">
+      <div className="text-center my-3">
+        <h2 className="font-serif text-[12pt] font-bold uppercase underline tracking-wide">{judulSurat}</h2>
+        <div className="font-sans text-[9.5pt] font-medium text-slate-800 mt-0.5">
           Nomor: {nomorSurat || '---/---/---/---'}
         </div>
         {perihal && (
-          <div className="font-sans text-[10pt] text-slate-700 mt-1">
+          <div className="font-sans text-[9pt] text-slate-700 mt-0.5">
             Perihal: {perihal}
           </div>
         )}
       </div>
 
       {/* 3. PEMBUKA */}
-      <p className="text-justify my-4 text-[10.5pt] leading-relaxed">{pembuka}</p>
+      <p className="text-justify my-2.5 text-[9.5pt] leading-normal">{pembuka}</p>
 
       {/* 4. TABEL IDENTITAS WARGA PEMOHON */}
       <table className="w-full my-3 font-sans text-[10pt] leading-normal">
@@ -222,53 +230,54 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
       )}
 
       {/* 6. ISI / REDAKSI SURAT */}
-      <p className="text-justify my-4 text-[10.5pt] leading-relaxed">
+      <p className="text-justify my-2.5 text-[9.5pt] leading-normal">
         Demikian bahwa yang bersangkutan {isiSurat}
       </p>
 
       {/* 7. PENUTUP */}
-      <p className="text-justify my-4 text-[10.5pt] leading-relaxed">{penutup}</p>
+      <p className="text-justify my-2 text-[9.5pt] leading-normal">{penutup}</p>
 
       {/* 8. TANDA TANGAN, CAP & QR CODE */}
-      <div className="mt-8 pt-4 flex items-end justify-between gap-6">
+      <div className="mt-4 pt-2 flex items-end justify-between gap-6">
         {/* QR CODE */}
         <div className="text-center w-36 flex flex-col items-center">
           {qrUrl ? (
-            <img src={qrUrl} alt="QR Validasi" className="w-24 h-24 border border-slate-300 p-1 bg-white shadow-sm" />
+            <img src={qrUrl} alt="QR Validasi" className="w-20 h-20 border border-slate-300 p-1 bg-white shadow-sm" />
           ) : (
-            <div className="w-24 h-24 border border-slate-300 flex items-center justify-center text-xs text-slate-400">QR</div>
+            <div className="w-20 h-20 border border-slate-300 flex items-center justify-center text-xs text-slate-400">QR</div>
           )}
-          <div className="font-sans text-[7.5pt] text-slate-600 mt-1 leading-tight">Pindai QR untuk verifikasi keaslian surat</div>
-          <div className="font-mono text-[7pt] text-slate-400 mt-0.5">{verifKode}</div>
+          <div className="font-sans text-[7pt] text-slate-600 mt-1 leading-tight">Pindai QR untuk verifikasi keaslian surat</div>
+          <div className="font-mono text-[6.5pt] text-slate-400 mt-0.5">{verifKode}</div>
         </div>
 
         {/* TTD LURAH & CAP */}
-        <div className="text-center w-64 relative font-sans text-[10.5pt]">
+        <div className="text-center w-64 relative font-sans text-[9.5pt]">
           <div className="text-slate-800">{lokasiTgl}</div>
-          <div className="font-bold text-slate-900 mt-0.5">{lurahJabatan} {kop.nama_desa || 'Kelurahan Suka Maju'}</div>
-          <div className="relative h-24 flex items-center justify-center my-1">
+          <div className="font-bold text-slate-900 mt-0.5">{lurahJabatan} {namaDesa}</div>
+          <div className="relative h-20 flex items-center justify-center my-0.5">
             {lurahTtd ? (
-              <img src={lurahTtd} alt="Tanda Tangan Lurah" className="max-h-20 max-w-44 object-contain z-10 filter drop-shadow-sm" />
+              <img src={lurahTtd} alt="Tanda Tangan Lurah" className="max-h-16 max-w-40 object-contain z-10 filter drop-shadow-sm" />
             ) : (
-              <div className="h-16 flex items-center justify-center text-xs text-slate-400 italic font-serif">(Tanda Tangan Basah)</div>
+              <div className="h-14 flex items-center justify-center text-xs text-slate-400 italic font-serif">(Tanda Tangan Basah)</div>
             )}
             {/* Stempel */}
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 w-20 h-20 rounded-full border-2 border-indigo-700/60 p-1 flex items-center justify-center pointer-events-none rotate-[-12deg] z-0 select-none">
-              <div className="w-full h-full rounded-full border border-dashed border-indigo-600/60 flex flex-col items-center justify-center text-indigo-700/70 font-sans font-bold text-[6pt] text-center uppercase tracking-tighter leading-none">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-18 h-18 rounded-full border-2 border-indigo-700/60 p-1 flex items-center justify-center pointer-events-none rotate-[-12deg] z-0 select-none">
+              <div className="w-full h-full rounded-full border border-dashed border-indigo-600/60 flex flex-col items-center justify-center text-indigo-700/70 font-sans font-bold text-[5.5pt] text-center uppercase tracking-tighter leading-none">
                 <span>PEMERINTAH KOTA</span>
-                <span className="text-[5pt] my-0.5">★ KELURAHAN ★</span>
+                <span className="text-[4.5pt] my-0.5">★ KELURAHAN ★</span>
                 <span>TERVERIFIKASI</span>
               </div>
             </div>
           </div>
-          <div className="font-bold underline text-slate-950 mt-1 uppercase tracking-wide">{lurahNama}</div>
-          <div className="text-[9pt] text-slate-700 mt-0.5">NIP. {lurahNip}</div>
+          <div className="font-bold underline text-slate-950 uppercase tracking-wide">{lurahNama}</div>
+          <div className="text-[8.5pt] text-slate-700 mt-0.5">NIP. {lurahNip}</div>
         </div>
       </div>
 
-      {/* 9. FOOTER */}
-      <div className="mt-12 pt-3 border-t border-slate-300 text-center font-sans text-[8pt] text-slate-500">
-        {kop.nama_desa || 'Kelurahan Suka Maju'} • Dokumen ini diterbitkan secara sah dan tersimpan dalam Sistem Informasi Pelayanan Surat (SIPESUR).
+      {/* 9. FOOTER RESMI (Pas 1 Lembar) */}
+      <div className="mt-4 pt-2 border-t border-slate-300 text-center font-sans text-[7.5pt] text-slate-500 leading-tight">
+        <div>{namaDesa} • {alamatKop}</div>
+        <div className="text-slate-400 mt-0.5">Dokumen ini diterbitkan secara sah dan tersimpan dalam Sistem Informasi Pelayanan Surat (SIPESUR).</div>
       </div>
     </div>
   );
@@ -535,9 +544,13 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
         </div>
       </div>
 
-      {/* ── CSS KHUSUS CETAK DOKUMEN RESMI A4 (ANTI-BLANK PAGE) ── */}
+      {/* ── CSS KHUSUS CETAK DOKUMEN RESMI A4 (ANTI-BLANK PAGE & PAS 1 LEMBAR) ── */}
       <style>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm 12mm;
+          }
           /* Sembunyikan seluruh UI luar */
           body * {
             visibility: hidden !important;
@@ -551,13 +564,17 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: none !important;
-            min-height: auto !important;
+            max-width: 100% !important;
+            min-height: 0 !important;
+            max-height: 280mm !important;
             margin: 0 !important;
-            padding: 15mm 20mm 20mm 20mm !important;
+            padding: 4mm 6mm !important;
             box-shadow: none !important;
             border: none !important;
             background: white !important;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            overflow: hidden !important;
           }
           .no-print {
             display: none !important;

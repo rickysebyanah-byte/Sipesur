@@ -38,7 +38,7 @@ const ST_WARGA = {
 
 const COL_WARGA = {
   menunggu_verifikasi: 'bg-amber-50 text-amber-900 border-amber-400',
-  terverifikasi: 'bg-brand-50 text-brand-900 border-brand-500 font-semibold',
+  terverifikasi: 'bg-emerald-50 text-emerald-900 border-emerald-500 font-semibold',
   ditolak: 'bg-rose-50 text-rose-900 border-rose-400',
 };
 
@@ -67,6 +67,7 @@ const MENU = {
   ],
   lurah: [
     ['/app', 'Beranda'],
+    ['/app/verifikasi-warga', 'Verifikasi warga'],
     ['/app/pengajuan', 'Persetujuan surat warga'],
     ['/app/surat-keluar', 'Buat surat keluar'],
     ['/app/surat-masuk', 'Disposisi surat masuk'],
@@ -2000,16 +2001,19 @@ function VerifikasiWarga() {
 
   const handleVerif = async (hasil) => {
     if (hasil === 'ditolak' && !catatan.trim()) {
-      return alert('Alasan penolakan wajib diisi.');
+      return setM({ t: 'Alasan penolakan verifikasi wajib diisi.' });
     }
     setLoading(true);
+    setM(null);
     try {
-      await api.post(`/verifikasi-warga/${selected.id}`, { hasil, catatan });
+      const res = await api.post(`/verifikasi-warga/${selected.id}`, { hasil, catatan });
+      const namaWarga = selected.nama;
       setSelected(null);
       setCatatan('');
+      setM({ t: res.data?.message || `Akun warga ${namaWarga} berhasil ${hasil === 'terverifikasi' ? 'diverifikasi' : 'ditolak'}.`, ok: true });
       load();
     } catch (x) {
-      alert(em(x));
+      setM({ t: em(x) });
     } finally {
       setLoading(false);
     }
@@ -2025,7 +2029,10 @@ function VerifikasiWarga() {
             <select
               className="inp text-xs py-1"
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setM(null);
+              }}
             >
               <option value="menunggu_verifikasi">⏳ Menunggu Verifikasi</option>
               <option value="terverifikasi">✓ Terverifikasi</option>
@@ -2035,24 +2042,26 @@ function VerifikasiWarga() {
           </div>
         }
       >
+        <Msg m={m} />
         <Table
           head={['Nama Warga', 'NIK (Tersensor)', 'No KK (Tersensor)', 'Telepon / WA', 'Tgl Daftar', 'Status', 'Tindakan']}
           rows={(rows || []).map((r) => [
             <b key="n" className="text-navy">{r.nama}</b>,
-            r.nik_masked,
-            r.no_kk_masked,
+            r.nik_masked || '-',
+            r.no_kk_masked || '-',
             r.telepon || '-',
             tg(r.created_at),
             <BadgeWarga key="s" s={r.status_verifikasi} />,
             <button
               key="act"
-              className="btn btn-p text-xs py-1 px-2.5"
+              className="btn btn-p text-xs py-1 px-2.5 font-semibold"
               onClick={() => {
                 setSelected(r);
                 setCatatan(r.catatan_verifikasi || '');
+                setM(null);
               }}
             >
-              Periksa & Verifikasi
+              {r.status_verifikasi === 'menunggu_verifikasi' ? 'Periksa & Verifikasi' : 'Lihat Detail Data'}
             </button>,
           ])}
         />
@@ -2061,16 +2070,18 @@ function VerifikasiWarga() {
       {/* Modal Pemeriksaan Detail Warga */}
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="card w-full max-w-lg">
+          <div className="card w-full max-w-lg shadow-xl">
             <div className="mb-4 flex items-center justify-between border-b pb-2">
               <div>
-                <h3 className="font-bold text-navy text-base">Pemeriksaan Identitas Warga</h3>
-                <p className="text-xs text-slate-400">Verifikasi manual data kependudukan</p>
+                <h3 className="font-bold text-navy text-base">Pemeriksaan Identitas Kependudukan</h3>
+                <p className="text-xs text-slate-400">Verifikasi data NIK & KK warga Kelurahan Suka Maju</p>
               </div>
-              <button className="text-slate-400 hover:text-slate-600" onClick={() => setSelected(null)}>
+              <button className="text-slate-400 hover:text-slate-600 text-sm p-1" onClick={() => setSelected(null)}>
                 ✕
               </button>
             </div>
+
+            <Msg m={m} />
 
             <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-lg border">
               <div className="grid grid-cols-2 gap-2">
@@ -2087,50 +2098,66 @@ function VerifikasiWarga() {
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
                 <div>
                   <span className="text-slate-400 block">NIK:</span>
-                  <code className="text-xs bg-white px-1.5 py-0.5 rounded font-bold">{selected.nik}</code>
+                  <code className="text-xs bg-white px-2 py-0.5 rounded font-mono font-bold text-slate-800 border">{selected.nik || '-'}</code>
                 </div>
                 <div>
                   <span className="text-slate-400 block">No. Kartu Keluarga:</span>
-                  <code className="text-xs bg-white px-1.5 py-0.5 rounded font-bold">{selected.no_kk}</code>
+                  <code className="text-xs bg-white px-2 py-0.5 rounded font-mono font-bold text-slate-800 border">{selected.no_kk || '-'}</code>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
                 <div>
                   <span className="text-slate-400 block">Tempat / Tgl Lahir:</span>
-                  <b>{selected.tempat_lahir}, {selected.tanggal_lahir ? String(selected.tanggal_lahir).slice(0, 10) : '-'}</b>
+                  <b>{selected.tempat_lahir || '-'}, {selected.tanggal_lahir ? String(selected.tanggal_lahir).slice(0, 10) : '-'}</b>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Jenis Kelamin:</span>
-                  <b>{selected.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}</b>
+                  <b>{selected.jenis_kelamin === 'L' ? 'Laki-laki' : selected.jenis_kelamin === 'P' ? 'Perempuan' : '-'}</b>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-slate-200">
-                <span className="text-slate-400 block">Alamat KTP:</span>
+                <span className="text-slate-400 block">Alamat KTP / Tempat Tinggal:</span>
                 <b>{selected.alamat || '-'}</b>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
                 <div>
+                  <span className="text-slate-400 block">Pekerjaan:</span>
+                  <b>{selected.pekerjaan || '-'}</b>
+                </div>
+                <div>
                   <span className="text-slate-400 block">No. Telepon / WA:</span>
                   <b>{selected.telepon || '-'}</b>
                 </div>
-                <div>
-                  <span className="text-slate-400 block">Email:</span>
-                  <b>{selected.email || '-'}</b>
-                </div>
               </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <span className="text-slate-400 block">Alamat Email:</span>
+                <b>{selected.email || '-'}</b>
+              </div>
+
+              {selected.diverifikasi_at && (
+                <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 bg-white p-2 rounded border">
+                  Diverifikasi oleh: <b>{selected.verifikator || 'Petugas Kelurahan'}</b> • {tg(selected.diverifikasi_at)}
+                  {selected.catatan_verifikasi && (
+                    <div className="mt-1 text-slate-700 italic">
+                      Catatan: "{selected.catatan_verifikasi}"
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-4">
               <label className="block text-xs font-semibold text-slate-600 mb-1">
-                Catatan Petugas (Wajib jika menolak):
+                Catatan Petugas (Wajib jika menolak verifikasi):
               </label>
               <textarea
                 className="inp text-xs"
                 rows={2}
-                placeholder="Contoh: NIK dan nama sesuai data kependudukan."
+                placeholder="Contoh: Berkas KTP dan Kartu Keluarga telah diverifikasi sesuai kependudukan."
                 value={catatan}
                 onChange={(e) => setCatatan(e.target.value)}
               />
@@ -2139,7 +2166,7 @@ function VerifikasiWarga() {
             <div className="mt-5 flex justify-end gap-2 border-t pt-3">
               <button
                 type="button"
-                className="btn btn-d text-xs"
+                className="btn btn-d text-xs py-2 px-3.5 font-bold"
                 disabled={loading}
                 onClick={() => handleVerif('ditolak')}
               >
@@ -2147,11 +2174,11 @@ function VerifikasiWarga() {
               </button>
               <button
                 type="button"
-                className="btn bg-emerald-700 text-white hover:bg-emerald-800 text-xs font-bold"
+                className="btn bg-emerald-700 text-white hover:bg-emerald-800 text-xs py-2 px-4 font-bold"
                 disabled={loading}
                 onClick={() => handleVerif('terverifikasi')}
               >
-                ✓ Setujui & Verifikasi Akun
+                {loading ? 'Menyimpan…' : '✓ Setujui & Verifikasi Akun'}
               </button>
             </div>
           </div>
@@ -6153,7 +6180,7 @@ export default function App() {
             <Route
               path="verifikasi-warga"
               element={
-                <Only r={['petugas', 'admin']}>
+                <Only r={['petugas', 'lurah', 'admin']}>
                   <VerifikasiWarga />
                 </Only>
               }

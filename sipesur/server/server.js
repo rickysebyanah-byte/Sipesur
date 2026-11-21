@@ -820,10 +820,10 @@ app.get(
 app.get(
   '/api/verifikasi-warga',
   auth,
-  role('petugas', 'admin'),
+  role('petugas', 'lurah', 'admin'),
   ah(async (req, res) => {
     const st = req.query.status || 'menunggu_verifikasi';
-    const where = st === 'all' ? '' : 'WHERE u.status_verifikasi = ?';
+    const where = st === 'all' ? "WHERE u.role = 'warga'" : "WHERE u.role = 'warga' AND u.status_verifikasi = ?";
     const params = st === 'all' ? [] : [st];
 
     const rows = await q(
@@ -849,7 +849,7 @@ app.get(
 app.get(
   '/api/verifikasi-warga/:id',
   auth,
-  role('petugas', 'admin'),
+  role('petugas', 'lurah', 'admin'),
   ah(async (req, res) => {
     const [w] = await q(
       `SELECT u.id, u.nama, u.email, u.status_verifikasi, u.catatan_verifikasi, u.diverifikasi_at, u.created_at,
@@ -858,7 +858,7 @@ app.get(
        FROM users u
        JOIN warga w ON w.user_id = u.id
        LEFT JOIN users v ON v.id = u.diverifikasi_oleh
-       WHERE u.id = ?`,
+       WHERE u.id = ? AND u.role = 'warga'`,
       [req.params.id]
     );
     if (!w) throw fail(404, 'Data warga tidak ditemukan');
@@ -873,7 +873,7 @@ app.get(
 app.post(
   '/api/verifikasi-warga/:id',
   auth,
-  role('petugas', 'admin'),
+  role('petugas', 'lurah', 'admin'),
   ah(async (req, res) => {
     const { hasil, catatan } = req.body;
     if (!['terverifikasi', 'ditolak'].includes(hasil)) {
@@ -1267,8 +1267,11 @@ async function prosesTerbitkanSurat(pengajuanId, actorUser, signatureOverride = 
     kode = s.kode_verifikasi;
     file = path.resolve(s.file_path);
 
-    // Jika forceRegenerate ATAU file fisik belum ada atau terhapus, buat ulang PDF dengan data dinamis
-    if (forceRegenerate || !fs.existsSync(file)) {
+    const isOldMock = (str) => !str || /merdeka|contoh|sukamaju(?!\.medan)|\(021\)|12345/i.test(String(str));
+    const mustRegenerate = forceRegenerate || !fs.existsSync(file) || isOldMock(s.lurah_nama) || isOldMock(s.lurah_nip);
+
+    // Jika forceRegenerate ATAU file fisik belum ada atau terhapus atau data lama, buat ulang PDF dengan data dinamis
+    if (mustRegenerate) {
       const storageDir = path.join(DATA_DIR, 'storage', 'surat');
       fs.mkdirSync(storageDir, { recursive: true });
       file = path.join(storageDir, `${kode}.pdf`);
@@ -1297,8 +1300,8 @@ async function prosesTerbitkanSurat(pengajuanId, actorUser, signatureOverride = 
             telepon: w.telepon || '-',
           },
           kop,
-          lurah: s.lurah_nama || lurahNama,
-          nip: s.lurah_nip || lurahNip,
+          lurah: !isOldMock(s.lurah_nama) ? s.lurah_nama : lurahNama,
+          nip: !isOldMock(s.lurah_nip) ? s.lurah_nip : lurahNip,
           jabatan: lurahJabatan,
           tanda_tangan: s.tanda_tangan || lurahTtd,
           url: `${process.env.CLIENT_URL || CLIENT}/verifikasi/${kode}`,
@@ -1454,10 +1457,10 @@ app.get(
     if (!s) throw fail(404, 'Surat belum terbit untuk pengajuan ini');
 
     let fullPath = path.resolve(s.file_path);
-    // Jika file fisik belum ada atau hilang, lakukan generate ulang secara otomatis
-    if (!fs.existsSync(fullPath)) {
+    // Jika file fisik belum ada atau hilang atau ada instruksi regenerasi, lakukan generate ulang secara otomatis
+    if (req.query.refresh || req.query.regenerate || !fs.existsSync(fullPath)) {
       try {
-        await prosesTerbitkanSurat(p.id, req.user);
+        await prosesTerbitkanSurat(p.id, req.user, true);
         const [updatedS] = await q('SELECT * FROM surat WHERE pengajuan_id=?', [p.id]);
         if (updatedS) {
           s = updatedS;
@@ -2047,6 +2050,7 @@ app.post(
     const kodeFile = crypto.randomBytes(6).toString('hex');
     const file = path.join(storageDir, `Surat-Balasan-${kodeFile}.pdf`);
 
+    const [profil] = await q('SELECT * FROM profil_desa LIMIT 1');
     const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
     // Buat PDF surat dinas
@@ -2057,8 +2061,10 @@ app.post(
         perihal: perihal,
         isi: isi_surat.trim(),
         tanggal: tanggalStr,
-        lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
-        nip: lurah?.nip || '197508102000031002',
+        kop: profil || {},
+        lurah: lurah?.nama || profil?.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+        nip: lurah?.nip || profil?.nip_lurah || '198506122010011005',
+        jabatan: profil?.jabatan_lurah || 'Lurah Suka Maju',
       },
       file
     );
@@ -2270,14 +2276,15 @@ app.get(
     const s = sk[0];
 
     const fullPath = s.file_path ? path.resolve(s.file_path) : null;
-    if (!fullPath || !fs.existsSync(fullPath)) {
-      // Buat ulang jika file belum ada
+    if (req.query.refresh || req.query.regenerate || !fullPath || !fs.existsSync(fullPath)) {
+      // Buat ulang jika file belum ada atau diminta refresh
       const storageDir = path.join(DATA_DIR, 'storage', 'surat_keluar');
       fs.mkdirSync(storageDir, { recursive: true });
       const kodeFile = crypto.randomBytes(6).toString('hex');
       const newFile = path.join(storageDir, `Surat-Keluar-${kodeFile}.pdf`);
 
       const [lurah] = await q("SELECT nama, nip FROM users WHERE id = ?", [s.ditandatangani_oleh]);
+      const [profil] = await q('SELECT * FROM profil_desa LIMIT 1');
       const now = new Date(s.tanggal_surat || s.created_at);
       const tanggalStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -2288,8 +2295,10 @@ app.get(
           perihal: s.perihal,
           isi: s.isi_surat,
           tanggal: tanggalStr,
-          lurah: lurah?.nama || 'Drs. H. Ahmad Fauzi, M.Si',
-          nip: lurah?.nip || '197508102000031002',
+          kop: profil || {},
+          lurah: lurah?.nama || profil?.nama_lurah || 'Muhammad Iqbal Samosir, S.E., M.A.P.',
+          nip: lurah?.nip || profil?.nip_lurah || '198506122010011005',
+          jabatan: profil?.jabatan_lurah || 'Lurah Suka Maju',
         },
         newFile
       );

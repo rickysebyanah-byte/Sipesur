@@ -437,7 +437,46 @@ function executeLocalSql(sql, params = []) {
     return [{ rowCount: 1, affectedRows: 1 }];
   }
 
-  // 3. SELECT USERS
+  // 3a. VERIFIKASI WARGA: SELECT users u JOIN warga w
+  if (upper.includes('FROM USERS U') && upper.includes('JOIN WARGA W')) {
+    let wargaUsers = (dbData.users || []).filter((u) => u.role === 'warga');
+
+    if (upper.includes('U.STATUS_VERIFIKASI = ?') || upper.includes('STATUS_VERIFIKASI = ?')) {
+      const stFilter = String(params[0] || '').trim();
+      wargaUsers = wargaUsers.filter((u) => (u.status_verifikasi || 'menunggu_verifikasi') === stFilter);
+    }
+    if (upper.includes('U.ID = ?') || upper.includes('WHERE U.ID = ?')) {
+      const uid = Number(params[params.length - 1] || params[0]);
+      wargaUsers = wargaUsers.filter((u) => u.id === uid);
+    }
+
+    return wargaUsers
+      .map((u) => {
+        const w = (dbData.warga || []).find((item) => item.user_id === u.id) || {};
+        const v = u.diverifikasi_oleh ? (dbData.users || []).find((x) => x.id === u.diverifikasi_oleh) : null;
+        return {
+          id: u.id,
+          nama: u.nama,
+          email: u.email,
+          status_verifikasi: u.status_verifikasi || 'menunggu_verifikasi',
+          catatan_verifikasi: u.catatan_verifikasi || null,
+          diverifikasi_at: u.diverifikasi_at || null,
+          created_at: u.created_at,
+          nik: w.nik || '',
+          no_kk: w.no_kk || '',
+          tempat_lahir: w.tempat_lahir || '',
+          tanggal_lahir: w.tanggal_lahir || '',
+          jenis_kelamin: w.jenis_kelamin || '',
+          alamat: w.alamat || '',
+          pekerjaan: w.pekerjaan || '',
+          telepon: w.telepon || '',
+          verifikator: v?.nama || null,
+        };
+      })
+      .sort((a, b) => b.id - a.id);
+  }
+
+  // 3b. SELECT USERS
   if (upper.includes('FROM USERS') && upper.includes('WHERE')) {
     let rows = [...dbData.users];
     if (upper.includes('EMAIL = ?') || upper.includes('USERNAME = ?') || upper.includes('NIP = ?')) {
@@ -470,7 +509,21 @@ function executeLocalSql(sql, params = []) {
     }
   }
 
-  // 4. UPDATE users SET tanda_tangan=? WHERE id=?
+  // 4. UPDATE users SET status_verifikasi=?, catatan_verifikasi=?, diverifikasi_oleh=?, diverifikasi_at=CURRENT_TIMESTAMP WHERE id=?
+  if (upper.startsWith('UPDATE USERS') && upper.includes('STATUS_VERIFIKASI')) {
+    const targetId = Number(params[params.length - 1]);
+    const u = (dbData.users || []).find((x) => x.id === targetId);
+    if (u) {
+      u.status_verifikasi = params[0];
+      u.catatan_verifikasi = params[1] || null;
+      u.diverifikasi_oleh = params[2] ? Number(params[2]) : null;
+      u.diverifikasi_at = new Date().toISOString();
+      saveLocalDb();
+    }
+    return [{ rowCount: 1, affectedRows: 1 }];
+  }
+
+  // 4b. UPDATE users SET tanda_tangan=? WHERE id=?
   if (upper.startsWith('UPDATE USERS') && upper.includes('TANDA_TANGAN')) {
     const uid = Number(params[1]);
     const u = dbData.users.find((x) => x.id === uid);
@@ -483,6 +536,94 @@ function executeLocalSql(sql, params = []) {
 
   // 5. UPDATE users
   if (upper.startsWith('UPDATE USERS')) {
+    const uid = Number(params[params.length - 1]);
+    const u = (dbData.users || []).find((x) => x.id === uid);
+    if (u && params.length >= 2) {
+      if (upper.includes('SET NAMA=?') && params.length === 2) {
+        u.nama = params[0];
+      }
+      saveLocalDb();
+    }
+    return [{ rowCount: 1, affectedRows: 1 }];
+  }
+
+  // 5b. INSERT INTO USERS
+  if (upper.startsWith('INSERT INTO USERS')) {
+    dbData.users = dbData.users || [];
+    const newId = (dbData.users.length ? Math.max(...dbData.users.map((r) => r.id || 0)) : 0) + 1;
+    let newUser;
+    if (params.length === 7) {
+      newUser = {
+        id: newId,
+        nama: params[0],
+        email: params[1] || null,
+        username: params[2],
+        password: params[3],
+        role: params[4] || 'warga',
+        status_verifikasi: params[5] || 'menunggu_verifikasi',
+        catatan_verifikasi: null,
+        must_change_password: 0,
+        tanda_tangan: null,
+        aktif: params[6] ?? 1,
+        created_at: new Date().toISOString(),
+      };
+    } else {
+      newUser = {
+        id: newId,
+        nama: params[0],
+        email: params[1] || null,
+        username: params[2],
+        nip: params[3] || null,
+        jabatan: params[4] || null,
+        telepon: params[5] || null,
+        password: params[6],
+        role: params[7] || 'warga',
+        status_verifikasi: params[8] || (params[7] === 'warga' ? 'menunggu_verifikasi' : 'terverifikasi'),
+        catatan_verifikasi: null,
+        must_change_password: params[9] ?? 0,
+        tanda_tangan: null,
+        aktif: params[10] ?? 1,
+        created_at: new Date().toISOString(),
+      };
+    }
+    dbData.users.push(newUser);
+    saveLocalDb();
+    return [{ id: newId }];
+  }
+
+  // 5c. INSERT & UPDATE WARGA
+  if (upper.startsWith('INSERT INTO WARGA')) {
+    dbData.warga = dbData.warga || [];
+    const newId = (dbData.warga.length ? Math.max(...dbData.warga.map((r) => r.id || 0)) : 0) + 1;
+    const newWarga = {
+      id: newId,
+      user_id: Number(params[0]),
+      nik: String(params[1]),
+      no_kk: String(params[2]),
+      tempat_lahir: params[3] || null,
+      tanggal_lahir: params[4] || null,
+      jenis_kelamin: params[5] || null,
+      alamat: params[6] || null,
+      pekerjaan: params[7] || null,
+      telepon: params[8] || null,
+    };
+    dbData.warga.push(newWarga);
+    saveLocalDb();
+    return [{ id: newId }];
+  }
+
+  if (upper.startsWith('UPDATE WARGA')) {
+    const uid = Number(params[params.length - 1]);
+    const w = (dbData.warga || []).find((x) => x.user_id === uid);
+    if (w) {
+      w.tempat_lahir = params[0] || w.tempat_lahir;
+      w.tanggal_lahir = params[1] || w.tanggal_lahir;
+      w.jenis_kelamin = params[2] || w.jenis_kelamin;
+      w.alamat = params[3] || w.alamat;
+      w.pekerjaan = params[4] || w.pekerjaan;
+      w.telepon = params[5] || w.telepon;
+      saveLocalDb();
+    }
     return [{ rowCount: 1, affectedRows: 1 }];
   }
 
