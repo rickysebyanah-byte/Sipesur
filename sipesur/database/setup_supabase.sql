@@ -36,6 +36,7 @@ CREATE TABLE users (
   diverifikasi_oleh INT REFERENCES users(id) ON DELETE SET NULL,
   diverifikasi_at TIMESTAMPTZ,
   must_change_password SMALLINT NOT NULL DEFAULT 0,
+  tanda_tangan TEXT,
   aktif SMALLINT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -116,6 +117,7 @@ CREATE TABLE persetujuan (
   pengajuan_id INT NOT NULL REFERENCES pengajuan(id) ON DELETE CASCADE,
   lurah_id INT NOT NULL REFERENCES users(id),
   hasil VARCHAR(20) NOT NULL CHECK (hasil IN ('setuju','tolak')),
+  tanda_tangan TEXT,
   catatan TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -127,7 +129,29 @@ CREATE TABLE surat (
   kode_verifikasi VARCHAR(40) UNIQUE NOT NULL,
   file_path VARCHAR(255) NOT NULL,
   petugas_id INT NOT NULL REFERENCES users(id),
+  lurah_nama VARCHAR(100),
+  lurah_nip VARCHAR(30),
+  tanda_tangan TEXT,
+  kop_data JSONB,
   terbit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS profil_desa (
+  id SERIAL PRIMARY KEY,
+  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Sukamaju',
+  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Contoh',
+  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Contoh',
+  provinsi VARCHAR(100) NOT NULL DEFAULT 'Jawa Barat',
+  alamat TEXT NOT NULL DEFAULT 'Jl. Merdeka No. 1',
+  kode_pos VARCHAR(10) NOT NULL DEFAULT '12345',
+  telepon VARCHAR(30) NOT NULL DEFAULT '(021) 000-0000',
+  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan.sukamaju@pemkot.go.id',
+  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.kelurahan.go.id',
+  logo_url TEXT,
+  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Drs. Hadi Purnomo, M.Si',
+  nip_lurah VARCHAR(30) NOT NULL DEFAULT '197503151998031004',
+  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Sukamaju',
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE notifikasi (
@@ -170,6 +194,7 @@ ALTER TABLE dokumen        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE verifikasi     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE persetujuan    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE surat          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE profil_desa    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifikasi     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs  DISABLE ROW LEVEL SECURITY;
 
@@ -366,6 +391,10 @@ INSERT INTO persyaratan (jenis_surat_id,nama) VALUES
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'KTP'),
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'Kartu Keluarga'),
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'Pas Foto');
+
+INSERT INTO profil_desa (nama_desa, kecamatan, kabupaten_kota, provinsi, alamat, kode_pos, telepon, email, website, nama_lurah, nip_lurah, jabatan_lurah)
+VALUES ('Kelurahan Sukamaju', 'Kecamatan Contoh', 'Pemerintah Kota Contoh', 'Jawa Barat', 'Jl. Merdeka No. 1', '12345', '(021) 000-0000', 'kelurahan.sukamaju@pemkot.go.id', 'sukamaju.kelurahan.go.id', 'Drs. Hadi Purnomo, M.Si', '197503151998031004', 'Lurah Sukamaju')
+ON CONFLICT (id) DO NOTHING;
 
 -- ================================================================
 -- 5. VERIFIKASI

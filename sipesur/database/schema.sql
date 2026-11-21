@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS pengajuan CASCADE;
 DROP TABLE IF EXISTS persyaratan CASCADE;
 DROP TABLE IF EXISTS jenis_surat CASCADE;
 DROP TABLE IF EXISTS warga CASCADE;
+DROP TABLE IF EXISTS profil_desa CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 -- 1. Tabel users (Akun Warga, Petugas, Lurah, Admin)
@@ -31,6 +32,7 @@ CREATE TABLE users (
   diverifikasi_oleh INT REFERENCES users(id) ON DELETE SET NULL,
   diverifikasi_at TIMESTAMPTZ,
   must_change_password SMALLINT NOT NULL DEFAULT 0,
+  tanda_tangan TEXT,
   aktif SMALLINT NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -129,6 +131,7 @@ CREATE TABLE persetujuan (
   pengajuan_id INT NOT NULL REFERENCES pengajuan(id) ON DELETE CASCADE,
   lurah_id INT NOT NULL REFERENCES users(id),
   hasil VARCHAR(20) NOT NULL CHECK (hasil IN ('setuju', 'tolak')),
+  tanda_tangan TEXT,
   catatan TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -141,10 +144,33 @@ CREATE TABLE surat (
   kode_verifikasi VARCHAR(40) UNIQUE NOT NULL,
   file_path VARCHAR(255) NOT NULL,
   petugas_id INT NOT NULL REFERENCES users(id),
+  lurah_nama VARCHAR(100),
+  lurah_nip VARCHAR(30),
+  tanda_tangan TEXT,
+  kop_data JSONB,
   terbit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 10. Tabel notifikasi pengguna
+-- 10. Tabel profil desa & kop surat dinamis
+CREATE TABLE profil_desa (
+  id SERIAL PRIMARY KEY,
+  nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Sukamaju',
+  kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Contoh',
+  kabupaten_kota VARCHAR(100) NOT NULL DEFAULT 'Pemerintah Kota Contoh',
+  provinsi VARCHAR(100) NOT NULL DEFAULT 'Jawa Barat',
+  alamat TEXT NOT NULL DEFAULT 'Jl. Merdeka No. 1',
+  kode_pos VARCHAR(10) NOT NULL DEFAULT '12345',
+  telepon VARCHAR(30) NOT NULL DEFAULT '(021) 000-0000',
+  email VARCHAR(100) NOT NULL DEFAULT 'kelurahan.sukamaju@pemkot.go.id',
+  website VARCHAR(100) NOT NULL DEFAULT 'sukamaju.kelurahan.go.id',
+  logo_url TEXT,
+  nama_lurah VARCHAR(100) NOT NULL DEFAULT 'Drs. Hadi Purnomo, M.Si',
+  nip_lurah VARCHAR(30) NOT NULL DEFAULT '197503151998031004',
+  jabatan_lurah VARCHAR(100) NOT NULL DEFAULT 'Lurah Sukamaju',
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. Tabel notifikasi pengguna
 CREATE TABLE notifikasi (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -161,6 +187,55 @@ CREATE TABLE activity_logs (
   detail VARCHAR(255),
   ip VARCHAR(60),
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. Tabel berita & pengumuman kelurahan
+CREATE TABLE IF NOT EXISTS berita (
+  id SERIAL PRIMARY KEY,
+  judul VARCHAR(255) NOT NULL,
+  isi TEXT NOT NULL,
+  kategori VARCHAR(50) DEFAULT 'Pengumuman',
+  tanggal DATE DEFAULT CURRENT_DATE,
+  penulis_id INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. Tabel direktori UMKM lokal
+CREATE TABLE IF NOT EXISTS umkm (
+  id SERIAL PRIMARY KEY,
+  nama VARCHAR(150) NOT NULL,
+  jenis VARCHAR(80),
+  alamat TEXT,
+  telepon VARCHAR(50),
+  deskripsi TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Tabel galeri kegiatan warga & kelurahan
+CREATE TABLE IF NOT EXISTS galeri_kegiatan (
+  id SERIAL PRIMARY KEY,
+  judul VARCHAR(200) NOT NULL,
+  deskripsi TEXT,
+  url_foto TEXT NOT NULL,
+  tanggal DATE DEFAULT CURRENT_DATE,
+  penulis_id INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Tabel transparansi anggaran kelurahan
+CREATE TABLE IF NOT EXISTS anggaran (
+  id SERIAL PRIMARY KEY,
+  tahun INT NOT NULL,
+  program VARCHAR(255) NOT NULL,
+  pagu NUMERIC(15,2) DEFAULT 0,
+  realisasi NUMERIC(15,2) DEFAULT 0,
+  sumber VARCHAR(100) DEFAULT 'APBD',
+  keterangan TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indeks untuk performa query

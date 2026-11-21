@@ -4,40 +4,93 @@ import fs from 'fs';
 
 // Template body default per kode surat
 const TEMPLATE_DEFAULT = {
-  SKD: 'adalah benar warga dan berdomisili di wilayah Kelurahan Sukamaju. Surat keterangan domisili ini diberikan untuk keperluan yang bersangkutan sesuai permohonan.',
-  SKTM: 'adalah benar warga Kelurahan Sukamaju dan berdasarkan hasil verifikasi lapangan, yang bersangkutan tergolong ke dalam warga tidak mampu secara ekonomi. Surat ini diterbitkan untuk keperluan yang bersangkutan.',
-  SKCK: 'adalah warga Kelurahan Sukamaju yang bermaksud mengurus Surat Keterangan Catatan Kepolisian (SKCK) di Polsek/Polres setempat. Yang bersangkutan adalah warga yang baik dan tidak pernah terlibat tindak pidana berdasarkan catatan lingkungan setempat.',
-  SKU: 'adalah warga Kelurahan Sukamaju yang menjalankan usaha aktif di wilayah kelurahan. Surat ini dibuat untuk menerangkan keberadaan usaha yang bersangkutan sesuai dengan keadaan sebenarnya.',
-  SKLH: 'adalah warga Kelurahan Sukamaju. Surat ini menerangkan bahwa telah lahir seorang anak yang merupakan anggota keluarga yang bersangkutan, sebagaimana data yang tertera.',
-  SKM: 'adalah warga Kelurahan Sukamaju. Surat ini menerangkan bahwa telah terjadi peristiwa kematian dalam keluarga yang bersangkutan. Surat ini dibuat untuk keperluan pelaporan resmi sesuai ketentuan yang berlaku.',
-  SKBM: 'adalah warga Kelurahan Sukamaju. Berdasarkan data kependudukan dan hasil verifikasi, yang bersangkutan hingga saat ini berstatus belum pernah menikah. Surat ini dibuat untuk keperluan yang bersangkutan.',
-  SPP: 'adalah warga Kelurahan Sukamaju yang bermaksud melakukan pindah domisili. Surat pengantar ini dibuat untuk mempermudah proses administrasi kependudukan yang bersangkutan di tempat tujuan.',
+  SKD: 'adalah benar warga dan berdomisili di wilayah kelurahan kami. Surat keterangan domisili ini diberikan untuk keperluan yang bersangkutan sesuai permohonan.',
+  SKTM: 'adalah benar warga kelurahan kami dan berdasarkan hasil verifikasi lapangan, yang bersangkutan tergolong ke dalam warga tidak mampu secara ekonomi. Surat ini diterbitkan untuk keperluan yang bersangkutan.',
+  SKCK: 'adalah warga kelurahan kami yang bermaksud mengurus Surat Keterangan Catatan Kepolisian (SKCK) di Polsek/Polres setempat. Yang bersangkutan adalah warga yang baik dan tidak pernah terlibat tindak pidana berdasarkan catatan lingkungan setempat.',
+  SKU: 'adalah warga kelurahan kami yang menjalankan usaha aktif di wilayah kelurahan. Surat ini dibuat untuk menerangkan keberadaan usaha yang bersangkutan sesuai dengan keadaan sebenarnya.',
+  SKLH: 'adalah warga kelurahan kami. Surat ini menerangkan bahwa telah lahir seorang anak yang merupakan anggota keluarga yang bersangkutan, sebagaimana data yang tertera.',
+  SKM: 'adalah warga kelurahan kami. Surat ini menerangkan bahwa telah terjadi peristiwa kematian dalam keluarga yang bersangkutan. Surat ini dibuat untuk keperluan pelaporan resmi sesuai ketentuan yang berlaku.',
+  SKBM: 'adalah warga kelurahan kami. Berdasarkan data kependudukan dan hasil verifikasi, yang bersangkutan hingga saat ini berstatus belum pernah menikah. Surat ini dibuat untuk keperluan yang bersangkutan.',
+  SPP: 'adalah warga kelurahan kami yang bermaksud melakukan pindah domisili. Surat pengantar ini dibuat untuk mempermudah proses administrasi kependudukan yang bersangkutan di tempat tujuan.',
 };
 
 /**
- * Buat PDF surat keterangan resmi kelurahan.
+ * Helper: Parse base64 image data URL ke buffer
+ */
+function parseBase64Image(dataStr) {
+  if (!dataStr) return null;
+  try {
+    if (dataStr.startsWith('data:image')) {
+      const base64Data = dataStr.replace(/^data:image\/\w+;base64,/, '');
+      return Buffer.from(base64Data, 'base64');
+    }
+    if (fs.existsSync(dataStr)) {
+      return fs.readFileSync(dataStr);
+    }
+  } catch (err) {
+    console.error('[PDF] Gagal membaca data gambar tanda tangan / logo:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Buat PDF surat keterangan resmi kelurahan dengan Kop & TTD Dinamis.
  *
  * @param {object} opts
  * @param {string} opts.nomor       - Nomor surat
  * @param {string} opts.jenis       - Nama jenis surat
  * @param {string} opts.kode        - Kode jenis surat (SKD, SKTM, SKCK, ...)
- * @param {string} opts.template    - Template body dari database (boleh kosong)
+ * @param {string} opts.template    - Template body dari database
  * @param {Array}  opts.fields      - Array form fields [{name, label}]
  * @param {object} opts.data        - Data form yang diisi warga
- * @param {object} opts.warga       - Data warga {nama, nik, tempat_lahir, tanggal_lahir, jenis_kelamin, alamat, pekerjaan, telepon}
- * @param {string} opts.lurah       - Nama lurah
+ * @param {object} opts.warga       - Data warga
+ * @param {object} opts.kop         - Data Kop Profil Desa dinamis
+ * @param {string} opts.lurah       - Nama lurah penandatangan
+ * @param {string} opts.nip         - NIP lurah penandatangan
+ * @param {string} opts.jabatan     - Jabatan lurah penandatangan
+ * @param {string} opts.tanda_tangan- Base64 data URL tanda tangan unik lurah
  * @param {string} opts.url         - URL verifikasi QR
  * @param {string} opts.tanggal     - Tanggal terbit dalam format Indonesia
  * @param {string} file             - Path file output PDF
  */
 export async function buatPdf(opts, file) {
-  const { nomor, jenis, kode, template, fields = [], data = {}, warga, lurah, url, tanggal } = opts;
+  const {
+    nomor,
+    jenis,
+    kode,
+    template,
+    fields = [],
+    data = {},
+    warga = {},
+    kop = {},
+    lurah = 'Drs. Hadi Purnomo, M.Si',
+    nip = '197503151998031004',
+    jabatan = 'Lurah',
+    tanda_tangan = null,
+    url,
+    tanggal,
+  } = opts;
+
+  // Nama daerah dinamis dari Profil Desa
+  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Contoh').toUpperCase();
+  const namaDesa = (kop.nama_desa || 'Kelurahan Sukamaju').toUpperCase();
+  const namaKec = (kop.kecamatan || 'Kecamatan Contoh').toUpperCase();
+  const alamatLengkap = `${kop.alamat || 'Jl. Merdeka No. 1'}, Telp. ${kop.telepon || '(021) 000-0000'} • Kode Pos: ${kop.kode_pos || '12345'}`;
+  const infoKontak = [
+    kop.email ? `Email: ${kop.email}` : '',
+    kop.website ? `Website: ${kop.website}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
 
   // Buat QR code sebagai buffer gambar
-  const qrBuffer = await QRCode.toBuffer(url || 'https://sipesur.example.com', {
+  const qrBuffer = await QRCode.toBuffer(url || 'https://sipesur.id', {
     margin: 1,
     width: 130,
   });
+
+  const sigBuffer = parseBase64Image(tanda_tangan);
+  const logoBuffer = parseBase64Image(kop.logo_url);
 
   // Inisialisasi dokumen PDF
   const doc = new PDFDocument({ size: 'A4', margin: 60, bufferPages: true });
@@ -49,15 +102,28 @@ export async function buatPdf(opts, file) {
   const W = 475;  // lebar konten
 
   // ----------------------------------------------------------------
-  // KOP SURAT
+  // KOP SURAT DINAMIS
   // ----------------------------------------------------------------
-  doc.font('Helvetica-Bold').fontSize(13).text('PEMERINTAH KOTA CONTOH', L, doc.y, { align: 'center', width: W });
-  doc.font('Helvetica-Bold').fontSize(12).text('KELURAHAN SUKAMAJU', { align: 'center', width: W });
-  doc.font('Helvetica').fontSize(10).text('KECAMATAN CONTOH', { align: 'center', width: W });
-  doc.font('Helvetica').fontSize(9).text('Jl. Merdeka No. 1, Telp. (021) 000-0000', { align: 'center', width: W });
-  doc.font('Helvetica').fontSize(9).text('Kode Pos: 12345', { align: 'center', width: W });
+  const kopStartY = doc.y;
 
-  // Garis pembatas tebal
+  // Jika ada logo desa, gambar di sebelah kiri
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, L, kopStartY, { width: 60, height: 60, fit: [60, 60] });
+    } catch (e) {
+      console.warn('[PDF] Logo tidak dapat dimuat, dilewati:', e.message);
+    }
+  }
+
+  doc.font('Helvetica-Bold').fontSize(12).text(pemkab, L, doc.y, { align: 'center', width: W });
+  doc.font('Helvetica-Bold').fontSize(13).text(namaDesa, { align: 'center', width: W });
+  doc.font('Helvetica-Bold').fontSize(11).text(namaKec, { align: 'center', width: W });
+  doc.font('Helvetica').fontSize(9).text(alamatLengkap, { align: 'center', width: W });
+  if (infoKontak) {
+    doc.font('Helvetica').fontSize(8.5).text(infoKontak, { align: 'center', width: W });
+  }
+
+  // Garis pembatas tebal ganda standar resmi pemerintah
   doc.moveDown(0.5);
   doc.moveTo(L, doc.y).lineTo(R, doc.y).lineWidth(2.5).stroke();
   doc.moveTo(L, doc.y + 2).lineTo(R, doc.y + 2).lineWidth(0.5).stroke();
@@ -67,7 +133,7 @@ export async function buatPdf(opts, file) {
   // JUDUL & NOMOR SURAT
   // ----------------------------------------------------------------
   doc.moveDown(1.2);
-  doc.font('Helvetica-Bold').fontSize(13).text(jenis.toUpperCase(), L, doc.y, {
+  doc.font('Helvetica-Bold').fontSize(12.5).text(jenis.toUpperCase(), L, doc.y, {
     align: 'center',
     width: W,
     underline: true,
@@ -79,14 +145,14 @@ export async function buatPdf(opts, file) {
   // ----------------------------------------------------------------
   doc.moveDown(1.5);
   doc.font('Helvetica').fontSize(10.5).text(
-    'Yang bertanda tangan di bawah ini, Lurah Kelurahan Sukamaju, Kecamatan Contoh, Kota Contoh, dengan ini menerangkan bahwa:',
+    `Yang bertanda tangan di bawah ini, ${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'}, ${kop.kecamatan || 'Kecamatan Contoh'}, ${kop.kabupaten_kota || 'Kota Contoh'}, dengan ini menerangkan bahwa:`,
     L,
     doc.y,
     { width: W, align: 'justify' }
   );
 
   // ----------------------------------------------------------------
-  // DATA IDENTITAS WARGA (tabel)
+  // DATA IDENTITAS WARGA (Tabel)
   // ----------------------------------------------------------------
   doc.moveDown(0.8);
 
@@ -108,7 +174,6 @@ export async function buatPdf(opts, file) {
   doc.font('Helvetica').fontSize(10.5);
   for (const [key, val] of identitasRows) {
     const startY = doc.y;
-    // Hitung tinggi baris berdasarkan nilai (bisa multiline)
     const textHeight = doc.heightOfString(String(val || '-'), { width: valWidth });
     const rowH = Math.max(textHeight, 14) + 2;
 
@@ -116,7 +181,6 @@ export async function buatPdf(opts, file) {
     doc.text(':', colSep, startY, { width: 10 });
     doc.text(String(val || '-'), colVal, startY, { width: valWidth });
 
-    // Pindah ke bawah baris ini
     doc.y = startY + rowH;
   }
 
@@ -147,10 +211,9 @@ export async function buatPdf(opts, file) {
   // ----------------------------------------------------------------
   doc.moveDown(1);
 
-  // Gunakan template dari DB jika ada, fallback ke default per kode
   const bodyText = (template && template.trim())
     ? template.trim()
-    : (TEMPLATE_DEFAULT[kode] || 'adalah benar warga Kelurahan Sukamaju.');
+    : (TEMPLATE_DEFAULT[kode] || `adalah benar warga ${kop.nama_desa || 'Kelurahan Sukamaju'}.`);
 
   doc.font('Helvetica').fontSize(10.5).text(
     `Demikian bahwa yang bersangkutan ${bodyText}`,
@@ -171,53 +234,85 @@ export async function buatPdf(opts, file) {
   );
 
   // ----------------------------------------------------------------
-  // TANDA TANGAN & QR CODE
+  // TANDA TANGAN, CAP KELURAHAN & QR CODE
   // ----------------------------------------------------------------
   doc.moveDown(1.5);
 
-  // Pastikan ada ruang cukup, jika tidak buat halaman baru
-  if (doc.y > 660) {
+  if (doc.y > 640) {
     doc.addPage();
   }
 
   const sigY = doc.y;
 
   // QR Code (kiri bawah)
-  doc.image(qrBuffer, L, sigY, { width: 90 });
-  doc.font('Helvetica').fontSize(7.5).text(
-    'Pindai untuk verifikasi\nkeaslian surat',
+  doc.image(qrBuffer, L, sigY, { width: 85 });
+  doc.font('Helvetica').fontSize(7.5).fillColor('#333333').text(
+    'Pindai QR untuk verifikasi\nkeaslian dokumen resmi',
     L,
-    sigY + 95,
-    { width: 100, align: 'center' }
+    sigY + 90,
+    { width: 95, align: 'center' }
   );
 
-  // Area tanda tangan (kanan)
-  const sigX = 350;
-  const sigW = 185;
+  // Area tanda tangan (kanan bawah)
+  const sigX = 330;
+  const sigW = 205;
+  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Sukamaju'}, ${tanggal}`;
 
-  doc.font('Helvetica').fontSize(10.5).text(`Sukamaju, ${tanggal}`, sigX, sigY, { width: sigW, align: 'center' });
-  doc.font('Helvetica').fontSize(10.5).text('Lurah Kelurahan Sukamaju', sigX, doc.y + 2, { width: sigW, align: 'center' });
-  doc.font('Helvetica').fontSize(10.5).text('', sigX, doc.y + 55, { width: sigW });
-  doc.font('Helvetica-Bold').fontSize(10.5).text(lurah || 'Lurah', sigX, doc.y, {
+  doc.font('Helvetica').fontSize(10.5).fillColor('#000000').text(lokasiTgl, sigX, sigY, { width: sigW, align: 'center' });
+  doc.font('Helvetica').fontSize(10.5).text(`${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'}`, sigX, doc.y + 2, { width: sigW, align: 'center' });
+
+  // TANDA TANGAN ASLI LURAH (Beda orang beda tanda tangan)
+  const ttdTopY = doc.y + 4;
+
+  if (sigBuffer) {
+    try {
+      // Sematkan tanda tangan digital asli milik Lurah yang menyetujui
+      doc.image(sigBuffer, sigX + 35, ttdTopY, { width: 135, height: 50, fit: [135, 50] });
+    } catch (sigErr) {
+      console.warn('[PDF] Gagal menyematkan tanda tangan gambar:', sigErr.message);
+    }
+  }
+
+  // Stempel Digital Resmi Kelurahan (Cap basah ungu/merah transparan yang menimpa sebagian tanda tangan)
+  try {
+    const stampRadius = 26;
+    const stampCenterX = sigX + 45;
+    const stampCenterY = ttdTopY + 25;
+
+    doc.save();
+    doc.opacity(0.45);
+    doc.lineWidth(1.2);
+    doc.circle(stampCenterX, stampCenterY, stampRadius).stroke('#4f5b93');
+    doc.circle(stampCenterX, stampCenterY, stampRadius - 3).stroke('#4f5b93');
+    doc.font('Helvetica-Bold').fontSize(6.5).fillColor('#4f5b93');
+    doc.text('PEMERINTAH KOTA', stampCenterX - 25, stampCenterY - 14, { width: 50, align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(5.5).text('★ KELURAHAN ★', stampCenterX - 25, stampCenterY - 2, { width: 50, align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(6).text('RESMI TERVERIFIKASI', stampCenterX - 25, stampCenterY + 8, { width: 50, align: 'center' });
+    doc.restore();
+  } catch (stampErr) {
+    // Ignore stempel error if any
+  }
+
+  doc.y = ttdTopY + 54;
+  doc.font('Helvetica-Bold').fontSize(10.5).fillColor('#000000').text(lurah, sigX, doc.y, {
     width: sigW,
     align: 'center',
     underline: true,
   });
-  doc.font('Helvetica').fontSize(9).text('NIP. -', sigX, doc.y + 2, { width: sigW, align: 'center' });
+  doc.font('Helvetica').fontSize(9).text(`NIP. ${nip || '-'}`, sigX, doc.y + 2, { width: sigW, align: 'center' });
 
   // ----------------------------------------------------------------
-  // FOOTER
+  // FOOTER RESMI
   // ----------------------------------------------------------------
   const footerY = doc.page.height - 40;
   doc.moveTo(L, footerY - 6).lineTo(R, footerY - 6).lineWidth(0.5).stroke();
-  doc.font('Helvetica').fontSize(8).fillColor('#555555').text(
-    'Kelurahan Sukamaju | Jl. Merdeka No. 1 | Telp. (021) 000-0000 | Kode Pos: 12345',
+  doc.font('Helvetica').fontSize(8).fillColor('#64748b').text(
+    `${kop.nama_desa || 'Kelurahan Sukamaju'} • ${alamatLengkap}`,
     L,
     footerY,
     { width: W, align: 'center' }
   );
 
-  // Selesai
   doc.end();
   await new Promise((resolve, reject) => {
     stream.on('finish', resolve);
@@ -226,10 +321,26 @@ export async function buatPdf(opts, file) {
 }
 
 /**
- * Buat PDF Surat Dinas / Balasan Resmi Kelurahan
+ * Buat PDF Surat Dinas / Balasan Resmi Kelurahan dengan Kop Dinamis & TTD Lurah
  */
 export async function buatPdfSuratDinas(opts, file) {
-  const { nomor, tujuan, perihal, isi, tanggal, lurah = 'Drs. H. Ahmad Fauzi, M.Si', nip = '197508102000031002' } = opts;
+  const {
+    nomor,
+    tujuan,
+    perihal,
+    isi,
+    tanggal,
+    kop = {},
+    lurah = 'Drs. Hadi Purnomo, M.Si',
+    nip = '197503151998031004',
+    jabatan = 'Lurah',
+    tanda_tangan = null,
+  } = opts;
+
+  const pemkab = (kop.kabupaten_kota || 'Pemerintah Kota Contoh').toUpperCase();
+  const namaDesa = (kop.nama_desa || 'Kelurahan Sukamaju').toUpperCase();
+  const namaKec = (kop.kecamatan || 'Kecamatan Contoh').toUpperCase();
+  const alamatLengkap = `${kop.alamat || 'Jl. Merdeka No. 1'}, Telp. ${kop.telepon || '(021) 000-0000'} • Kode Pos: ${kop.kode_pos || '12345'}`;
 
   const doc = new PDFDocument({ size: 'A4', margin: 60, bufferPages: true });
   const stream = fs.createWriteStream(file);
@@ -239,13 +350,19 @@ export async function buatPdfSuratDinas(opts, file) {
   const R = 535;
   const W = 475;
 
-  // KOP SURAT
-  doc.font('Helvetica-Bold').fontSize(13).text('PEMERINTAH KOTA CONTOH', L, doc.y, { align: 'center', width: W });
-  doc.font('Helvetica-Bold').fontSize(12).text('KELURAHAN SUKAMAJU', { align: 'center', width: W });
-  doc.font('Helvetica').fontSize(10).text('KECAMATAN CONTOH', { align: 'center', width: W });
-  doc.font('Helvetica').fontSize(9).text('Jl. Merdeka No. 1, Telp. (021) 000-0000 • Kode Pos: 12345', { align: 'center', width: W });
+  // KOP SURAT DINAMIS
+  const logoBuffer = parseBase64Image(kop.logo_url);
+  if (logoBuffer) {
+    try {
+      doc.image(logoBuffer, L, doc.y, { width: 55, height: 55, fit: [55, 55] });
+    } catch (e) { }
+  }
 
-  // Garis pembatas tebal
+  doc.font('Helvetica-Bold').fontSize(12).text(pemkab, L, doc.y, { align: 'center', width: W });
+  doc.font('Helvetica-Bold').fontSize(13).text(namaDesa, { align: 'center', width: W });
+  doc.font('Helvetica-Bold').fontSize(11).text(namaKec, { align: 'center', width: W });
+  doc.font('Helvetica').fontSize(9).text(alamatLengkap, { align: 'center', width: W });
+
   doc.moveDown(0.5);
   doc.moveTo(L, doc.y).lineTo(R, doc.y).lineWidth(2.5).stroke();
   doc.moveTo(L, doc.y + 2).lineTo(R, doc.y + 2).lineWidth(0.5).stroke();
@@ -254,16 +371,15 @@ export async function buatPdfSuratDinas(opts, file) {
   // Tanggal & Nomor Surat
   doc.moveDown(1.5);
   const startY = doc.y;
+  const lokasiTgl = `${kop.nama_desa ? kop.nama_desa.replace(/^(kelurahan|desa)\s+/i, '') : 'Sukamaju'}, ${tanggal}`;
 
-  // Kiri: Nomor, Sifat, Lampiran, Perihal
   doc.font('Helvetica').fontSize(10);
   doc.text(`Nomor     : ${nomor}`, L, startY);
   doc.text('Sifat        : Penting', L, doc.y + 2);
   doc.text('Lampiran : -', L, doc.y + 2);
   doc.text(`Perihal    : ${perihal}`, L, doc.y + 2);
 
-  // Kanan: Tempat & Tanggal
-  doc.text(`Sukamaju, ${tanggal}`, 330, startY, { width: 200, align: 'right' });
+  doc.text(lokasiTgl, 330, startY, { width: 200, align: 'right' });
   doc.text('Kepada Yth.', 330, doc.y + 8, { width: 200, align: 'left' });
   doc.font('Helvetica-Bold').text(tujuan, 330, doc.y + 2, { width: 200, align: 'left' });
   doc.font('Helvetica').text('di -', 330, doc.y + 2, { width: 200, align: 'left' });
@@ -285,11 +401,20 @@ export async function buatPdfSuratDinas(opts, file) {
 
   // Tanda Tangan
   doc.moveDown(2);
-  if (doc.y > 650) doc.addPage();
-  const sigX = 340;
-  const sigW = 195;
-  doc.text('Lurah Kelurahan Sukamaju,', sigX, doc.y, { width: sigW, align: 'center' });
-  doc.moveDown(4);
+  if (doc.y > 640) doc.addPage();
+  const sigX = 330;
+  const sigW = 205;
+  doc.text(`${jabatan} ${kop.nama_desa || 'Kelurahan Sukamaju'},`, sigX, doc.y, { width: sigW, align: 'center' });
+
+  const sigBuffer = parseBase64Image(tanda_tangan);
+  const ttdTopY = doc.y + 4;
+  if (sigBuffer) {
+    try {
+      doc.image(sigBuffer, sigX + 35, ttdTopY, { width: 135, height: 50, fit: [135, 50] });
+    } catch (e) { }
+  }
+
+  doc.y = ttdTopY + 54;
   doc.font('Helvetica-Bold').text(lurah, sigX, doc.y, { width: sigW, align: 'center', underline: true });
   doc.font('Helvetica').fontSize(9).text(`NIP. ${nip}`, sigX, doc.y + 2, { width: sigW, align: 'center' });
 

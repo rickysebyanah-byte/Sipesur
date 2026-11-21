@@ -1,108 +1,263 @@
+/* ================================================================
+   IMPORT FONT GOOGLE (optional — hapus jika offline)
+   ================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Literata:ital,wght@0,300;0,400;0,600;0,700;1,400;1,600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================================
+   BASE LAYER
+   ================================================================ */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
+
   body {
-    @apply bg-slate-100 font-sans text-base text-slate-900 antialiased;
+    @apply bg-slate-50 font-sans text-base text-slate-900 antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(79, 91, 147, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(99, 102, 241, 0.05) 0%, transparent 60%);
+    background-attachment: fixed;
   }
-  h1 {
+
+  h1, h2, h3 {
     @apply font-serif text-slate-950;
   }
-  img,
-  svg {
+
+  img, svg {
     @apply max-w-full;
   }
+
   ::selection {
-    @apply bg-brand-200 text-slate-950;
+    @apply bg-brand-200 text-brand-950;
   }
 }
 
+/* ================================================================
+   COMPONENT LAYER — Kelas siap pakai
+   ================================================================ */
 @layer components {
+
+  /* ---- TOMBOL ---- */
   .btn {
-    @apply inline-flex min-h-[2.5rem] select-none items-center justify-center gap-2 rounded px-4 py-2 text-sm font-bold transition-colors duration-100 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-[2.5rem] select-none items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97];
   }
+
+  /* Tombol Utama — PHP Purple gradient */
   .btn-p,
   .btn-blue {
-    @apply bg-brand-700 text-white hover:bg-brand-800;
+    background: linear-gradient(135deg, #4F5B93 0%, #6366f1 100%);
+    @apply text-white shadow-md shadow-brand-200/40 hover:shadow-lg hover:shadow-brand-300/40 hover:brightness-110;
   }
+
+  /* Tombol Outline */
+  .btn-o {
+    @apply border border-slate-300 bg-white text-slate-800 shadow-sm
+           hover:border-brand-400 hover:bg-brand-50/60 hover:text-brand-900
+           hover:shadow-md;
+  }
+
+  /* Tombol Navy (gelap) */
   .btn-navy {
     @apply bg-slate-900 text-white hover:bg-slate-800;
   }
-  .btn-o {
-    @apply border border-slate-400 bg-white text-slate-900 hover:bg-slate-50;
-  }
+
+  /* Tombol Hapus / Berbahaya */
   .btn-d {
-    @apply bg-rose-800 text-white hover:bg-rose-900;
-  }
-  .btn-success {
-    @apply bg-brand-700 text-white hover:bg-brand-800;
-  }
-  .btn-warn {
-    @apply bg-amber-700 text-white hover:bg-amber-800;
+    @apply bg-gradient-to-br from-rose-600 to-rose-700 text-white shadow-sm shadow-rose-200/50
+           hover:from-rose-700 hover:to-rose-800 hover:shadow-md;
   }
 
-  .inp {
-    @apply w-full rounded border border-slate-400 bg-white px-3 py-2.5 text-base text-slate-900 placeholder-slate-500 transition-colors focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-700/25 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600 sm:text-sm;
+  /* Tombol Sukses */
+  .btn-success {
+    @apply bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-sm shadow-emerald-200/50
+           hover:from-emerald-700 hover:to-emerald-800 hover:shadow-md;
   }
+
+  /* Tombol Peringatan */
+  .btn-warn {
+    @apply bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm shadow-amber-200/50
+           hover:from-amber-600 hover:to-amber-700 hover:shadow-md;
+  }
+
+  /* ---- INPUT ---- */
+  .inp {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900
+           placeholder-slate-400 shadow-sm transition-all duration-150
+           focus:border-brand-500 focus:outline-none focus:ring-3 focus:ring-brand-400/20
+           disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 disabled:border-slate-200;
+  }
+
   textarea.inp {
     @apply resize-y;
   }
 
+  /* ---- KARTU ---- */
   .card {
-    @apply rounded border border-slate-300 bg-white p-4 sm:p-5;
+    @apply rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all sm:p-6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   }
+
   .card-hover {
-    @apply hover:border-slate-400;
+    @apply hover:border-brand-300 hover:shadow-md hover:shadow-brand-100/50;
   }
 
+  /* ---- BADGE / LABEL ---- */
   .badge {
-    @apply inline-flex items-center whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs font-bold;
+    @apply inline-flex items-center whitespace-nowrap rounded-lg border px-2.5 py-0.5 text-xs font-semibold;
   }
 
+  /* ---- PEMISAH ---- */
   .divider {
     @apply my-4 border-t border-slate-200;
   }
 
+  /* ---- SAFE AREA BOTTOM (Mobile) ---- */
   .pb-safe {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
   }
+
+  /* ---- NO-SCROLLBAR ---- */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
+/* ================================================================
+   SCROLLBAR CUSTOM — tampil cantik pada semua browser berbasis WebKit
+   ================================================================ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c9cfc5;
+  background: #c7cce8; /* warna PHP light purple */
   border-radius: 9999px;
+  transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a2aa9e;
+  background: #8892BF;
 }
 
+/* ================================================================
+   FOKUS AKSESIBILITAS
+   ================================================================ */
 :focus-visible {
-  outline: 2px solid #1c4d3d;
+  outline: 2.5px solid #777BB4;
   outline-offset: 2px;
+  border-radius: 6px;
 }
 
+/* ================================================================
+   SIDEBAR AKTIF — EFEK KHUSUS
+   ================================================================ */
+/* Nav link aktif di sidebar sudah menggunakan class brand, ini untuk
+   menambah kilauan halus pada item aktif */
+nav a[class*="border-brand-700"] {
+  box-shadow: inset 3px 0 0 #4F5B93;
+}
+
+/* ================================================================
+   ANIMASI RINGAN
+   ================================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: fadeIn 0.18s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ================================================================
+   REDUCED MOTION — Hormati preferensi aksesibilitas
+   ================================================================ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
   }
 }
 
+/* ================================================================
+   PRINT STYLES — Cetak Naskah Dinas A4 Resmi
+   ================================================================ */
 @media print {
-  .no-print {
+  @page {
+    size: A4 portrait;
+    margin: 20mm 20mm 25mm 25mm;
+  }
+
+  body {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  /* Sembunyikan elemen UI saat cetak */
+  header,
+  aside,
+  nav,
+  footer,
+  .btn,
+  button:not(.cetak-keep),
+  [role="dialog"],
+  .print-hide {
     display: none !important;
+  }
+
+  /* Tampilkan area cetak */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Konten cetak penuh */
+  main {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Kop surat cetak */
+  .kop-surat {
+    border-bottom: 3.5pt double black !important;
+    margin-bottom: 12pt;
+    page-break-inside: avoid;
+  }
+
+  /* Halaman baru sebelum TTD */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  /* Hindari potong di tengah elemen */
+  p, li, tr {
+    page-break-inside: avoid;
+  }
+
+  /* Warna hitam murni untuk cetak */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Link tanpa garis bawah saat cetak */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
   }
 }
