@@ -791,8 +791,183 @@ function executeLocalSql(sql, params = []) {
     return [{ rowCount: 1, affectedRows: 1 }];
   }
 
-  // 10. CEK STATUS PUBLIK
-  if (upper.includes('FROM PENGAJUAN P') && upper.includes('JOIN JENIS_SURAT')) {
+  // 9a. INSERT INTO PENGAJUAN
+  if (upper.startsWith('INSERT INTO PENGAJUAN')) {
+    dbData.pengajuan = dbData.pengajuan || [];
+    const newId = (dbData.pengajuan.length ? Math.max(...dbData.pengajuan.map((r) => r.id || 0)) : 0) + 1;
+    let df = params[3];
+    if (typeof df === 'string') {
+      try { df = JSON.parse(df); } catch (_) {}
+    }
+    const newRow = {
+      id: newId,
+      kode: params[0],
+      user_id: Number(params[1]),
+      jenis_surat_id: Number(params[2]),
+      data_form: df || {},
+      status: 'submitted',
+      catatan: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    dbData.pengajuan.push(newRow);
+    saveLocalDb();
+    return [{ id: newId, insertId: newId }];
+  }
+
+  // 9b. INSERT INTO DOKUMEN
+  if (upper.startsWith('INSERT INTO DOKUMEN')) {
+    dbData.dokumen = dbData.dokumen || [];
+    const newId = (dbData.dokumen.length ? Math.max(...dbData.dokumen.map((r) => r.id || 0)) : 0) + 1;
+    const newRow = {
+      id: newId,
+      pengajuan_id: Number(params[0]),
+      persyaratan_id: Number(params[1]),
+      nama_file: params[2],
+      path: params[3],
+      file_path: params[3],
+      mime: params[4],
+      created_at: new Date().toISOString(),
+    };
+    dbData.dokumen.push(newRow);
+    saveLocalDb();
+    return [{ id: newId, insertId: newId }];
+  }
+
+  // 9c. CEK KELENGKAPAN BERKAS (lengkap pid & jid)
+  if (upper.includes('FROM PERSYARATAN') && upper.includes('FROM DOKUMEN')) {
+    dbData.persyaratan = dbData.persyaratan || [];
+    dbData.dokumen = dbData.dokumen || [];
+    const jid = Number(params[0]);
+    const pid = Number(params[1]);
+    const a = dbData.persyaratan.filter((s) => s.jenis_surat_id === jid).length;
+    const b = dbData.dokumen.filter((d) => d.pengajuan_id === pid).length;
+    return [{ a, b }];
+  }
+
+  // 9d. SELECT DOKUMEN (Detail, File, Check)
+  if (upper.includes('FROM DOKUMEN')) {
+    dbData.dokumen = dbData.dokumen || [];
+    dbData.pengajuan = dbData.pengajuan || [];
+
+    // SELECT d.*,p.user_id FROM dokumen d JOIN pengajuan p ON p.id=d.pengajuan_id WHERE d.id=?
+    if (upper.includes('JOIN PENGAJUAN') || upper.includes('D.ID=?') || upper.includes('D.ID = ?')) {
+      const docId = Number(params[0]);
+      const d = dbData.dokumen.find((item) => item.id === docId);
+      if (!d) return [];
+      const p = dbData.pengajuan.find((item) => item.id === d.pengajuan_id) || {};
+      return [{ ...d, user_id: p.user_id }];
+    }
+
+    // SELECT path FROM dokumen WHERE pengajuan_id=? AND persyaratan_id=?
+    if (upper.includes('PENGAJUAN_ID=? AND PERSYARATAN_ID=?') || upper.includes('PENGAJUAN_ID = ? AND PERSYARATAN_ID = ?')) {
+      const pid = Number(params[0]);
+      const sid = Number(params[1]);
+      return dbData.dokumen.filter((d) => d.pengajuan_id === pid && d.persyaratan_id === sid);
+    }
+
+    // SELECT id,persyaratan_id,nama_file FROM dokumen WHERE pengajuan_id=?
+    if (upper.includes('PENGAJUAN_ID=?') || upper.includes('PENGAJUAN_ID = ?')) {
+      const pid = Number(params[0]);
+      return dbData.dokumen.filter((d) => d.pengajuan_id === pid).map((d) => ({
+        id: d.id,
+        persyaratan_id: d.persyaratan_id,
+        nama_file: d.nama_file,
+        path: d.path,
+        file_path: d.path,
+        mime: d.mime,
+        created_at: d.created_at,
+      }));
+    }
+  }
+
+  // 9d. DELETE DOKUMEN
+  if (upper.startsWith('DELETE FROM DOKUMEN')) {
+    dbData.dokumen = dbData.dokumen || [];
+    if (upper.includes('PENGAJUAN_ID=? AND PERSYARATAN_ID=?') || upper.includes('PENGAJUAN_ID = ? AND PERSYARATAN_ID = ?')) {
+      const pid = Number(params[0]);
+      const sid = Number(params[1]);
+      dbData.dokumen = dbData.dokumen.filter((d) => !(d.pengajuan_id === pid && d.persyaratan_id === sid));
+      saveLocalDb();
+      return [{ rowCount: 1, affectedRows: 1 }];
+    }
+    if (upper.includes('PENGAJUAN_ID=?') || upper.includes('PENGAJUAN_ID = ?')) {
+      const pid = Number(params[0]);
+      dbData.dokumen = dbData.dokumen.filter((d) => d.pengajuan_id !== pid);
+      saveLocalDb();
+      return [{ rowCount: 1, affectedRows: 1 }];
+    }
+  }
+
+  // 9f. LIST PENGAJUAN (GET /api/pengajuan)
+  if (upper.includes('FROM PENGAJUAN P') && upper.includes('JOIN JENIS_SURAT J') && upper.includes('JOIN USERS U')) {
+    dbData.pengajuan = dbData.pengajuan || [];
+    let list = [...dbData.pengajuan];
+    if (upper.includes('P.USER_ID=?') || upper.includes('P.USER_ID = ?')) {
+      const uid = Number(params[0]);
+      list = list.filter((x) => x.user_id === uid);
+    }
+    if (upper.includes("P.STATUS IN ('PENDING_APPROVAL','APPROVED','REJECTED','ISSUED')")) {
+      list = list.filter((x) => ['pending_approval', 'approved', 'rejected', 'issued'].includes(x.status));
+    }
+    if (upper.includes('P.STATUS=?') || upper.includes('P.STATUS = ?')) {
+      const st = params[params.length - 1];
+      list = list.filter((x) => x.status === st);
+    }
+    list.sort((a, b) => (b.id || 0) - (a.id || 0));
+    return list.map((p) => {
+      const j = (dbData.jenis_surat || []).find((js) => js.id === p.jenis_surat_id) || {};
+      const u = (dbData.users || []).find((usr) => usr.id === p.user_id) || {};
+      return {
+        id: p.id,
+        kode: p.kode,
+        status: p.status,
+        created_at: p.created_at,
+        jenis: j.nama || 'Surat Keterangan',
+        pemohon: u.nama || 'Warga Suka Maju',
+      };
+    });
+  }
+
+  // 9g. DELETE PENGAJUAN
+  if (upper.startsWith('DELETE FROM PENGAJUAN WHERE ID=?') || upper.startsWith('DELETE FROM PENGAJUAN WHERE ID = ?')) {
+    const pid = Number(params[0]);
+    dbData.pengajuan = (dbData.pengajuan || []).filter((x) => x.id !== pid);
+    dbData.dokumen = (dbData.dokumen || []).filter((x) => x.pengajuan_id !== pid);
+    saveLocalDb();
+    return [{ rowCount: 1, affectedRows: 1 }];
+  }
+
+  // 10a. DETAIL PENGAJUAN LENGKAP (getP)
+  if (upper.includes('SELECT P.*') && upper.includes('FROM PENGAJUAN P') && upper.includes('JOIN JENIS_SURAT')) {
+    const idVal = Number(params[0]);
+    const p = (dbData.pengajuan || []).find((item) => item.id === idVal);
+    if (p) {
+      const js = (dbData.jenis_surat || []).find((j) => j.id === p.jenis_surat_id) || {};
+      const u = (dbData.users || []).find((usr) => usr.id === p.user_id) || {};
+      const w = (dbData.warga || []).find((wrg) => wrg.user_id === p.user_id) || {};
+      return [{
+        ...p,
+        jenis: js.nama || 'Surat Keterangan',
+        jkode: js.kode || 'SK',
+        form_fields: js.form_fields || [],
+        template: p.data_form?.redaksi_kustom || js.template || '',
+        pemohon: u.nama || 'Warga Suka Maju',
+        nik: w.nik || '',
+        no_kk: w.no_kk || '',
+        tempat_lahir: w.tempat_lahir || '-',
+        tanggal_lahir: w.tanggal_lahir || '-',
+        jenis_kelamin: w.jenis_kelamin || 'L',
+        alamat: w.alamat || '-',
+        pekerjaan: w.pekerjaan || '-',
+        telepon: w.telepon || '-',
+      }];
+    }
+    return [];
+  }
+
+  // 10b. CEK STATUS PUBLIK (Tracking)
+  if (upper.includes('UPPER(COALESCE(S.NOMOR') || (upper.includes('FROM PENGAJUAN P') && upper.includes('UPPER(P.KODE)'))) {
     const idVal = Number(params[0]);
     const kode1 = String(params[1] || '').trim().toUpperCase();
     const kode2 = String(params[2] || kode1).trim().toUpperCase();
@@ -819,6 +994,50 @@ function executeLocalSql(sql, params = []) {
       }];
     }
     return [];
+  }
+
+  // 10c. UPDATE PENGAJUAN
+  if (upper.startsWith('UPDATE PENGAJUAN')) {
+    dbData.pengajuan = dbData.pengajuan || [];
+    if (upper.includes('SET DATA_FORM')) {
+      const pid = Number(params[1]);
+      const p = dbData.pengajuan.find((x) => x.id === pid);
+      if (p) {
+        let df = params[0];
+        if (typeof df === 'string') {
+          try { df = JSON.parse(df); } catch (_) {}
+        }
+        p.data_form = df;
+        p.updated_at = new Date().toISOString();
+        saveLocalDb();
+      }
+      return [{ rowCount: 1, affectedRows: 1 }];
+    }
+    if (upper.includes('SET STATUS')) {
+      const pid = Number(params[2]);
+      const p = dbData.pengajuan.find((x) => x.id === pid);
+      if (p) {
+        p.status = params[0];
+        p.catatan = params[1] || null;
+        p.updated_at = new Date().toISOString();
+        saveLocalDb();
+      }
+      return [{ rowCount: 1, affectedRows: 1 }];
+    }
+  }
+
+  // 10d. UPDATE SURAT
+  if (upper.startsWith('UPDATE SURAT')) {
+    dbData.surat = dbData.surat || [];
+    if (upper.includes('SET NOMOR=?') || upper.includes('SET NOMOR = ?')) {
+      const pid = Number(params[1]);
+      const s = dbData.surat.find((x) => x.pengajuan_id === pid || x.id === pid);
+      if (s) {
+        s.nomor = params[0];
+        saveLocalDb();
+      }
+      return [{ rowCount: 1, affectedRows: 1 }];
+    }
   }
 
   // 11. STATISTIK PUBLIK

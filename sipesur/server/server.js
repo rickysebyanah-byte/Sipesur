@@ -94,7 +94,9 @@ const registerLimit = rateLimit({
 
 const auth = (req, res, next) => {
   try {
-    req.user = jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), SECRET);
+    const raw = (req.headers.authorization || '').replace('Bearer ', '').trim() || req.query.token;
+    if (!raw) throw new Error('NO_TOKEN');
+    req.user = jwt.verify(raw, SECRET);
     next();
   } catch {
     res.status(401).json({ message: 'Sesi berakhir, silakan login kembali' });
@@ -1512,7 +1514,7 @@ app.post(
   auth,
   role('lurah', 'admin'),
   ah(async (req, res) => {
-    const { hasil, catatan, tanda_tangan } = req.body;
+    const { hasil, catatan, tanda_tangan, redaksi, nomor } = req.body;
     if (!['setuju', 'tolak'].includes(hasil)) throw fail(400, 'Hasil tidak valid');
     if (hasil === 'tolak' && !(catatan || '').trim()) throw fail(400, 'Alasan penolakan wajib diisi');
     const p = await getP(req.params.id, req.user);
@@ -1525,6 +1527,16 @@ app.post(
     } else {
       // Sekaligus perbarui tanda tangan di profil lurah agar tersimpan untuk berikutnya
       await q('UPDATE users SET tanda_tangan=? WHERE id=?', [ttdToSave, req.user.id]);
+    }
+
+    // Simpan isi naskah/redaksi yang diisi Lurah ke data_form sebelum pengesahan
+    if (hasil === 'setuju' && (redaksi || nomor)) {
+      const currentData = typeof p.data_form === 'object' && p.data_form ? { ...p.data_form } : {};
+      if (redaksi) currentData.redaksi_kustom = redaksi;
+      if (nomor) currentData.nomor_surat = nomor;
+      await q('UPDATE pengajuan SET data_form=?::jsonb WHERE id=?', [JSON.stringify(currentData), p.id]);
+      // Perbarui objek p agar dipakai saat prosesTerbitkanSurat
+      p.data_form = currentData;
     }
 
     await move(p.id, ['pending_approval'], hasil === 'setuju' ? 'approved' : 'rejected', catatan);
@@ -1618,7 +1630,22 @@ app.get(
     ]);
     if (!d) throw fail(404, 'Dokumen tidak ditemukan');
     if (req.user.role === 'warga' && d.user_id !== req.user.id) throw fail(403, 'Akses ditolak');
-    res.type(d.mime).sendFile(path.resolve(d.path));
+
+    let filePath = d.path ? path.resolve(d.path) : null;
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Coba cari di folder uploads dengan nama file
+      const fallback = path.join(DATA_DIR, 'uploads', path.basename(d.path || ''));
+      if (fs.existsSync(fallback)) {
+        filePath = fallback;
+      } else {
+        throw fail(404, 'Berkas fisik dokumen persyaratan tidak ditemukan di server.');
+      }
+    }
+
+    const mime = d.mime || (d.nama_file?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(d.nama_file || 'dokumen')}"`);
+    res.sendFile(filePath);
   })
 );
 
@@ -2488,7 +2515,7 @@ app.put(
     if (pembuka !== undefined) currentData.pembuka_kustom = pembuka;
     if (penutup !== undefined) currentData.penutup_kustom = penutup;
 
-    await q('UPDATE pengajuan SET data_form=? WHERE id=?', [JSON.stringify(currentData), p.id]);
+    await q('UPDATE pengajuan SET data_form=?::jsonb WHERE id=?', [JSON.stringify(currentData), p.id]);
 
     if (nomor) {
       await q('UPDATE surat SET nomor=? WHERE pengajuan_id=?', [nomor, p.id]);

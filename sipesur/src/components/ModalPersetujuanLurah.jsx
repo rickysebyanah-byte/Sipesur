@@ -9,6 +9,15 @@ export default function ModalPersetujuanLurah({ pengajuan, user, onConfirm, onCl
   const [useSaved, setUseSaved] = useState(true);
   const [fetchingSig, setFetchingSig] = useState(true);
 
+  // ── Isi naskah surat (Lurah mengetik sebelum mengesahkan) ──
+  const templateDefault = pengajuan.template && pengajuan.template.trim()
+    ? pengajuan.template.trim()
+    : `adalah benar warga yang bertempat tinggal dan berdomisili di wilayah Kelurahan Suka Maju. Surat keterangan ini diberikan untuk keperluan administrasi kependudukan sesuai permohonan yang bersangkutan.`;
+  const [isiNaskah, setIsiNaskah] = useState(
+    (pengajuan.data_form?.redaksi_kustom) || templateDefault
+  );
+  const [nomorSurat, setNomorSurat] = useState(pengajuan.nomor_surat || '');
+
   useEffect(() => {
     api.get('/users/signature')
       .then((res) => {
@@ -30,6 +39,8 @@ export default function ModalPersetujuanLurah({ pengajuan, user, onConfirm, onCl
       hasil: 'setuju',
       catatan: catatan.trim(),
       tanda_tangan: finalSig || null,
+      redaksi: isiNaskah.trim(),
+      nomor: nomorSurat.trim(),
     });
   };
 
@@ -91,6 +102,65 @@ export default function ModalPersetujuanLurah({ pengajuan, user, onConfirm, onCl
               onChange={(e) => setCatatan(e.target.value)}
             />
           </label>
+
+          {/* ISI NASKAH SURAT — Lurah mengisi sebelum mengesahkan */}
+          <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 space-y-3">
+            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              📄 Susun Isi Naskah Surat Keterangan
+              <span className="ml-1 font-normal text-brand-700 italic">(wajib diisi sebelum mengesahkan)</span>
+            </div>
+            <div className="rounded-lg bg-white border border-slate-200 p-3 text-[11px] text-slate-600 leading-relaxed">
+              💡 Teks di bawah ini akan muncul dalam surat resmi setelah kata{' '}
+              <em>"Demikian bahwa yang bersangkutan…"</em>
+            </div>
+
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-700">Nomor Registrasi Surat:</span>
+              <input
+                type="text"
+                className="inp text-xs font-mono"
+                placeholder="Contoh: 470/012/Kel.SKM/XI/2026"
+                value={nomorSurat}
+                onChange={(e) => setNomorSurat(e.target.value)}
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-slate-700">Isi / Redaksi Naskah Surat: <span className="text-rose-500">*</span></span>
+              <textarea
+                rows={5}
+                className="inp text-xs leading-relaxed"
+                value={isiNaskah}
+                onChange={(e) => setIsiNaskah(e.target.value)}
+                placeholder="adalah benar warga yang berdomisili di wilayah Kelurahan Suka Maju…"
+              />
+              <span className="text-[10px] text-slate-400">{isiNaskah.length} karakter</span>
+            </label>
+
+            {/* Pilihan Redaksi Cepat */}
+            <div>
+              <div className="text-[11px] font-semibold text-slate-600 mb-1.5">🚀 Pilihan Redaksi Cepat:</div>
+              <div className="flex flex-col gap-1.5">
+                {[
+                  ['Domisili', `adalah benar warga yang bertempat tinggal dan berdomisili di wilayah Kelurahan Suka Maju. Surat keterangan ini diberikan untuk keperluan administrasi kependudukan.`],
+                  ['Usaha Aktif', `adalah benar warga kami yang memiliki dan menjalankan usaha aktif di wilayah Kelurahan Suka Maju. Surat keterangan ini dibuat untuk menerangkan keberadaan usaha sesuai keadaan sebenarnya.`],
+                  ['Tidak Mampu', `adalah benar warga kelurahan kami yang berdasarkan hasil verifikasi lapangan tergolong ke dalam keluarga tidak mampu secara ekonomi. Surat ini diterbitkan untuk pengajuan bantuan / beasiswa.`],
+                  ['Belum Menikah', `adalah warga kelurahan kami yang berdasarkan data kependudukan hingga saat ini berstatus belum pernah menikah (lajang). Surat ini dibuat untuk memenuhi kelengkapan berkas administrasi.`],
+                  ['Kelakuan Baik', `adalah warga kelurahan kami yang berkelakuan baik dan tidak pernah terlibat tindak kriminal. Surat pengantar ini diberikan untuk keperluan penerbitan SKCK.`],
+                ].map(([label, teks]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setIsiNaskah(teks)}
+                    className="text-left text-[11px] px-3 py-1.5 rounded-lg border border-slate-200 hover:border-brand-400 hover:bg-brand-50 text-slate-700 transition-all"
+                  >
+                    <span className="font-semibold text-brand-700">{label}:</span>{' '}
+                    <span className="text-slate-500">{teks.substring(0, 55)}…</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
           {/* TANDA TANGAN LURAH */}
           <div className="rounded-xl border border-brand-200 bg-brand-50/30 p-4 space-y-3">

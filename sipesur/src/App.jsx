@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import api, { openBlob, downloadPdf, viewPdf } from './api';
+import api, { openBlob, downloadPdf, viewPdf, getFileUrl } from './api';
 import SignaturePad from './components/SignaturePad';
 import ModalCetakSurat from './components/ModalCetakSurat';
 import ProfilDesa from './components/ProfilDesa';
@@ -2271,6 +2271,17 @@ function Ajukan() {
                     />
                   </Field>
                 ))}
+                {!formFields.some((f) => (f.name || '').toLowerCase().includes('keperluan')) && (
+                  <Field l="Keperluan / Alasan Pengajuan Surat" req>
+                    <input
+                      className="inp"
+                      required
+                      placeholder="Contoh: Pengurusan beasiswa, administrasi bank, melamar kerja, dll."
+                      value={data.keperluan || ''}
+                      onChange={(e) => setData({ ...data, keperluan: e.target.value })}
+                    />
+                  </Field>
+                )}
               </div>
             </div>
 
@@ -2382,6 +2393,153 @@ function List() {
   );
 }
 
+function ModalPratinjauBerkas({ dok, onClose }) {
+  const [key, setKey] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [loadError, setLoadError] = useState(false);
+  const isImage = /\.(jpe?g|png|webp|gif)$/i.test(dok?.nama_file || '');
+  const url = getFileUrl(`/dokumen/${dok.id}/file?v=${key}`);
+
+  const handleRefresh = () => {
+    setLoadError(false);
+    setKey((k) => k + 1);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6 backdrop-blur-xs">
+      <div className="relative flex flex-col w-full max-w-4xl max-h-[92vh] rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm text-slate-900 truncate">
+              {dok.nama || 'Dokumen Persyaratan'}
+            </h3>
+            <p className="text-xs text-slate-500 truncate">{dok.nama_file}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isImage && (
+              <div className="flex items-center bg-white rounded-lg border border-slate-200 text-xs overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 hover:bg-slate-100 font-bold"
+                  title="Perkecil"
+                >
+                  -
+                </button>
+                <span className="px-2 text-[11px] font-mono font-semibold">{Math.round(zoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 hover:bg-slate-100 font-bold"
+                  title="Perbesar"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoom(1)}
+                  className="px-2 py-1 hover:bg-slate-100 text-[10px] text-slate-500 border-l border-slate-100"
+                  title="Reset Zoom"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs py-1.5 px-3 transition-colors shadow-2xs"
+              title="Muat Ulang Berkas (Refresh)"
+            >
+              <span>🔄</span>
+              <span>Muat Ulang</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => viewPdf(`/dokumen/${dok.id}/file`)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs py-1.5 px-3 transition-colors shadow-2xs"
+              title="Buka di Tab Baru Browser"
+            >
+              <Icon name="eye" className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tab Baru</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadPdf(`/dokumen/${dok.id}/file`, dok.nama_file)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-700 hover:bg-brand-800 text-white font-semibold text-xs py-1.5 px-3 transition-colors shadow-2xs"
+              title="Unduh Berkas ke Perangkat"
+            >
+              <Icon name="download" className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Unduh</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-700 font-bold text-sm p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Content Preview */}
+        <div className="flex-1 overflow-auto bg-slate-100/80 p-4 flex items-center justify-center min-h-[360px]">
+          {loadError ? (
+            <div className="bg-white p-6 rounded-2xl border border-rose-200 shadow-md max-w-md text-center space-y-3">
+              <span className="text-4xl block">⚠️</span>
+              <div className="font-bold text-sm text-slate-900">Gagal Menampilkan Berkas</div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Berkas dokumen fisik belum dapat dimuat atau koneksi terputus. Silakan klik tombol muat ulang di bawah.
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  className="btn btn-p text-xs py-2 px-4 font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <span>🔄</span>
+                  <span>Muat Ulang / Refresh</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadPdf(`/dokumen/${dok.id}/file`, dok.nama_file)}
+                  className="btn btn-o text-xs py-2 px-3 font-semibold"
+                >
+                  Unduh Berkas
+                </button>
+              </div>
+            </div>
+          ) : isImage ? (
+            <div className="overflow-auto max-h-[72vh] flex items-center justify-center w-full">
+              <img
+                key={key}
+                src={url}
+                alt={dok.nama_file}
+                style={{
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.12s ease',
+                }}
+                className="max-h-[68vh] max-w-full object-contain rounded-lg shadow-md border border-slate-200 bg-white"
+                onError={() => setLoadError(true)}
+              />
+            </div>
+          ) : (
+            <iframe
+              key={key}
+              src={url}
+              title={dok.nama_file}
+              className="w-full h-[68vh] rounded-xl border border-slate-300 bg-white shadow-sm"
+              onError={() => setLoadError(true)}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Detail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -2392,8 +2550,8 @@ function Detail() {
   const [m, setM] = useState();
   const [loadingAct, setLoadingAct] = useState(false);
   const [tabDraf, setTabDraf] = useState(false);
-  const [modalCetak, setModalCetak] = useState(false);
   const [modalLurah, setModalLurah] = useState(false);
+  const [pratinjauDok, setPratinjauDok] = useState(null);
 
   const handleHapusPengajuan = async () => {
     const konfirmasi = window.confirm(
@@ -2578,10 +2736,10 @@ function Detail() {
             <button
               type="button"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs sm:text-sm py-2.5 px-5 transition-all shadow-md w-full sm:w-auto"
-              onClick={() => setModalCetak(true)}
+              onClick={() => downloadPdf(`/pengajuan/${id}/surat`, `Surat-${(d.surat?.nomor || p.kode).replace(/[/\\?%*:|"<>]/g, '_')}.pdf`)}
             >
               <span className="text-base">🖨️</span>
-              <span>Cetak Dokumen Resmi (A4)</span>
+              <span>Cetak / Unduh Dokumen Resmi (PDF)</span>
             </button>
             <button
               type="button"
@@ -2817,14 +2975,26 @@ function Detail() {
                 </div>
                 <div className="flex items-center gap-3">
                   {dk ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 font-bold text-brand-700 hover:underline bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
-                      onClick={() => viewPdf('/dokumen/' + dk.id + '/file')}
-                    >
-                      <Icon name="file" className="w-3.5 h-3.5" />
-                      <span>{dk.nama_file}</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 font-bold text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg border border-brand-200 transition-colors"
+                        onClick={() => setPratinjauDok({ id: dk.id, nama: sy.nama, nama_file: dk.nama_file })}
+                        title="Buka / Pratinjau Berkas Dokumen"
+                      >
+                        <Icon name="eye" className="w-3.5 h-3.5" />
+                        <span className="truncate max-w-[200px]">{dk.nama_file}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-300 transition-colors text-xs"
+                        onClick={() => downloadPdf('/dokumen/' + dk.id + '/file', dk.nama_file)}
+                        title="Unduh Berkas Ini"
+                      >
+                        <Icon name="download" className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Unduh</span>
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-rose-600 font-semibold bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 text-[11px]">
                       Belum Diunggah
@@ -2923,16 +3093,6 @@ function Detail() {
               {['petugas', 'lurah', 'admin'].includes(r) && (
                 <button
                   type="button"
-                  className="btn bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2.5 px-4 font-bold flex items-center gap-1.5 shadow-xs"
-                  onClick={() => setModalCetak(true)}
-                >
-                  <span>✏️</span>
-                  <span>Sesuaikan / Masukkan Isi Naskah Surat</span>
-                </button>
-              )}
-              {['petugas', 'lurah', 'admin'].includes(r) && (
-                <button
-                  type="button"
                   className="btn btn-d text-xs py-2.5 px-4 font-bold flex items-center gap-1.5 ml-auto"
                   onClick={handleHapusPengajuan}
                   disabled={loadingAct}
@@ -2961,9 +3121,6 @@ function Detail() {
         </div>
       )}
 
-      {/* MODAL CETAK SURAT RESMI (KOP DINAMIS & TTD ASLI LURAH) */}
-      {modalCetak && <ModalCetakSurat data={d} onClose={() => setModalCetak(false)} onUpdated={load} userRole={r} />}
-
       {/* MODAL PERSETUJUAN & TANDA TANGAN LURAH */}
       {modalLurah && (
         <ModalPersetujuanLurah
@@ -2972,6 +3129,14 @@ function Detail() {
           onConfirm={handleLurahApprove}
           onClose={() => setModalLurah(false)}
           loading={loadingAct}
+        />
+      )}
+
+      {/* MODAL PRATINJAU BERKAS PERSYARATAN (KTP, KK, DLL) */}
+      {pratinjauDok && (
+        <ModalPratinjauBerkas
+          dok={pratinjauDok}
+          onClose={() => setPratinjauDok(null)}
         />
       )}
     </div>

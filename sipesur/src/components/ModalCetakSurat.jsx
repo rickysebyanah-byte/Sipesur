@@ -8,24 +8,34 @@ import api, { downloadPdf } from '../api';
    – Petugas / Lurah / Admin (Yang Berwenang): BISA EDIT ISI & SIMPAN
    ===================================================================== */
 
-export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) {
+export default function ModalCetakSurat({ data, onClose, onUpdated, userRole, initialMode = 'preview' }) {
   const [qrUrl, setQrUrl] = useState('');
   const [savingRedaksi, setSavingRedaksi] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
+
+  // ── ATURAN HAK AKSES & STATUS ──
+  const canEdit = ['petugas', 'lurah', 'admin'].includes(userRole);
+  const isIssued = Boolean(data?.surat?.id || data?.surat?.nomor || data?.p?.status === 'issued');
+
+  const [tab, setTab] = useState(() => {
+    if (initialMode === 'editor' && canEdit) return 'editor';
+    if (canEdit && !isIssued) return 'editor';
+    return 'preview';
+  });
+
+  useEffect(() => {
+    if (initialMode === 'editor' && canEdit) {
+      setTab('editor');
+    } else if (initialMode === 'preview') {
+      setTab('preview');
+    }
+  }, [initialMode, canEdit]);
 
   if (!data) return null;
 
   const { p = {}, surat = {}, kop = {} } = data;
   const verifKode = surat?.kode_verifikasi || p.kode || '';
   const verifyLink = `${window.location.origin}/verifikasi/${verifKode}`;
-
-  // ── ATURAN HAK AKSES (RULES) ──
-  // Warga TIDAK BERHAK mengubah isi/redaksi naskah resmi!
-  // Hanya Petugas, Lurah, atau Admin yang berhak menyunting isi surat.
-  const role = userRole || (p.user_id ? 'warga' : 'petugas');
-  const canEdit = ['petugas', 'lurah', 'admin'].includes(userRole);
-
-  const [tab, setTab] = useState(canEdit ? 'editor' : 'preview');
 
   // ── Data kop surat & sanitasi nilai mock lama ──
   const isOld = (s) => !s || /merdeka|contoh|sukamaju(?!\.medan)|\(021\)|12345/i.test(String(s));
@@ -127,7 +137,7 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
   };
 
   // ── PRATINJAU SURAT A4 RESMI (PAS 1 LEMBAR A4) ──
-  const SuratA4 = () => (
+  const renderSuratA4 = () => (
     <div
       id="sipesur-print-area"
       className="printable-document mx-auto w-full max-w-[210mm] min-h-0 rounded-sm bg-white p-6 sm:p-8 text-slate-950 shadow-lg border border-slate-300 font-serif text-[10pt] leading-snug"
@@ -288,39 +298,49 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
       {/* ── BAR ATAS (tidak ikut cetak) ── */}
       <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm flex-shrink-0">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-700 text-white text-lg shadow-sm">🖨️</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-700 text-white text-lg shadow-sm">
+            {tab === 'editor' ? '✏️' : '🖨️'}
+          </span>
           <div>
             <h3 className="font-bold text-sm text-slate-900 leading-tight">
-              {canEdit ? 'Pratinjau & Cetak Surat (Mode Pejabat Berwenang)' : 'Cetak & Unduh Surat Resmi'}
+              {tab === 'editor'
+                ? 'Penyusunan & Penyesuaian Isi Naskah Surat'
+                : isIssued
+                ? 'Cetak & Unduh Dokumen Resmi (Format A4)'
+                : 'Pratinjau Draf Surat Kelurahan (Format A4)'}
             </h3>
             <p className="text-xs text-slate-500">
-              {canEdit ? 'Anda berwenang mengedit isi naskah sebelum dicetak' : 'Dokumen resmi kependudukan siap cetak (Format A4)'}
+              {tab === 'editor'
+                ? 'Sesuaikan redaksi naskah, kalimat pembuka, dan klausul sebelum diajukan / disahkan Lurah'
+                : isIssued
+                ? 'Dokumen resmi kependudukan berkekuatan hukum dengan TTE & QR Code Lurah'
+                : 'Simulasi format cetak dokumen resmi (belum diterbitkan)'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* TAB MOBILE JIKA PEJABAT BERWENANG */}
+          {/* TAB SWITCHER JIKA PEJABAT BERWENANG */}
           {canEdit && (
-            <div className="flex sm:hidden rounded-lg border border-slate-200 overflow-hidden text-xs">
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
               <button
                 type="button"
                 onClick={() => setTab('editor')}
                 className={`px-3 py-2 font-semibold transition-colors ${tab === 'editor' ? 'bg-brand-700 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
               >
-                ✏️ Editor Isi
+                ✏️ Editor Naskah
               </button>
               <button
                 type="button"
                 onClick={() => setTab('preview')}
                 className={`px-3 py-2 font-semibold transition-colors ${tab === 'preview' ? 'bg-brand-700 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
               >
-                👁️ Pratinjau A4
+                👁️ Pratinjau Cetak A4
               </button>
             </div>
           )}
 
-          {/* Tombol Simpan (HANYA MUNCUL UNTUK PETUGAS/LURAH/ADMIN) */}
+          {/* Tombol Simpan Perubahan Naskah (HANYA MUNCUL UNTUK PETUGAS/LURAH/ADMIN) */}
           {canEdit && (
             <button
               type="button"
@@ -329,7 +349,7 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
               className="btn btn-p py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-sm"
               title="Simpan perubahan naskah ke database"
             >
-              <span>{savingRedaksi ? '💾 Menyimpan…' : '💾 Simpan Isi Surat'}</span>
+              <span>{savingRedaksi ? '💾 Menyimpan…' : '💾 Simpan Perubahan Naskah'}</span>
             </button>
           )}
 
@@ -341,16 +361,18 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4H7v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            <span>Cetak Dokumen</span>
+            <span>{isIssued ? 'Cetak Dokumen' : 'Cetak Draf'}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleUnduhPdf}
-            className="btn btn-o py-2 px-3 text-xs font-semibold"
-          >
-            ⬇ Unduh PDF
-          </button>
+          {isIssued && (
+            <button
+              type="button"
+              onClick={handleUnduhPdf}
+              className="btn btn-o py-2 px-3 text-xs font-semibold"
+            >
+              ⬇ Unduh PDF
+            </button>
+          )}
 
           <button
             type="button"
@@ -540,7 +562,7 @@ export default function ModalCetakSurat({ data, onClose, onUpdated, userRole }) 
           className={`flex-1 overflow-y-auto bg-slate-200 p-4 sm:p-8
             ${canEdit && tab === 'editor' ? 'hidden sm:block' : 'block'}`}
         >
-          <SuratA4 />
+          {renderSuratA4()}
         </div>
       </div>
 

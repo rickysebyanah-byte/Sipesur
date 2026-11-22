@@ -56,22 +56,37 @@ export const downloadPdf = async (url, defaultName = 'surat-resmi.pdf') => {
 };
 
 /**
- * Membuka pratinjau berkas PDF di tab baru
+ * Menghasilkan URL berkas lengkap dengan query token untuk autentikasi tab baru / pratinjau
+ */
+export const getFileUrl = (url) => {
+  const token = localStorage.getItem('token') || '';
+  const cleanUrl = url.startsWith('/api') ? url : `/api${url.startsWith('/') ? url : '/' + url}`;
+  const sep = cleanUrl.includes('?') ? '&' : '?';
+  return token ? `${cleanUrl}${sep}token=${encodeURIComponent(token)}` : cleanUrl;
+};
+
+/**
+ * Membuka pratinjau berkas (PDF / Gambar) di tab baru dengan dukungan refresh browser
  */
 export const viewPdf = async (url) => {
-  try {
-    const res = await api.get(url, { responseType: 'blob' });
-    if (res.data.type === 'application/json') {
-      const text = await res.data.text();
-      const err = JSON.parse(text);
-      throw new Error(err.message || 'Gagal memuat berkas');
+  const directUrl = getFileUrl(url);
+  const win = window.open(directUrl, '_blank');
+  if (!win) {
+    try {
+      const res = await api.get(url, { responseType: 'blob' });
+      if (res.data.type === 'application/json') {
+        const text = await res.data.text();
+        const err = JSON.parse(text);
+        throw new Error(err.message || 'Gagal memuat berkas');
+      }
+      const contentType = res.headers['content-type'] || res.data.type || 'application/pdf';
+      const blob = new Blob([res.data], { type: contentType });
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      alert('Gagal membuka pratinjau berkas: ' + (err.response?.data?.message || err.message));
     }
-    const blob = new Blob([res.data], { type: 'application/pdf' });
-    const blobUrl = URL.createObjectURL(blob);
-    window.open(blobUrl, '_blank');
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-  } catch (err) {
-    alert('Gagal membuka pratinjau surat: ' + (err.response?.data?.message || err.message));
   }
 };
 
