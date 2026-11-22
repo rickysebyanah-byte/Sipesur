@@ -1,8 +1,12 @@
 -- ====================================================================
 -- SIPESUR (Sistem Informasi Pelayanan Surat Kelurahan)
 -- Database Schema for Supabase / PostgreSQL
+-- Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan
 -- ====================================================================
 
+DROP TABLE IF EXISTS surat_keluar CASCADE;
+DROP TABLE IF EXISTS disposisi CASCADE;
+DROP TABLE IF EXISTS surat_masuk CASCADE;
 DROP TABLE IF EXISTS activity_logs CASCADE;
 DROP TABLE IF EXISTS notifikasi CASCADE;
 DROP TABLE IF EXISTS surat CASCADE;
@@ -14,6 +18,10 @@ DROP TABLE IF EXISTS persyaratan CASCADE;
 DROP TABLE IF EXISTS jenis_surat CASCADE;
 DROP TABLE IF EXISTS warga CASCADE;
 DROP TABLE IF EXISTS profil_desa CASCADE;
+DROP TABLE IF EXISTS berita CASCADE;
+DROP TABLE IF EXISTS umkm CASCADE;
+DROP TABLE IF EXISTS galeri_kegiatan CASCADE;
+DROP TABLE IF EXISTS anggaran CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 -- 1. Tabel users (Akun Warga, Petugas, Lurah, Admin)
@@ -72,7 +80,7 @@ CREATE TABLE persyaratan (
 CREATE TABLE pengajuan (
   id SERIAL PRIMARY KEY,
   kode VARCHAR(20) UNIQUE NOT NULL,
-  user_id INT NOT NULL REFERENCES users(id),
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   jenis_surat_id INT NOT NULL REFERENCES jenis_surat(id),
   data_form JSONB NOT NULL DEFAULT '{}'::jsonb,
   status VARCHAR(30) NOT NULL DEFAULT 'submitted' CHECK (status IN (
@@ -179,7 +187,7 @@ CREATE TABLE notifikasi (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 11. Tabel log aktivitas audit sistem
+-- 12. Tabel log aktivitas audit sistem
 CREATE TABLE activity_logs (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -189,8 +197,8 @@ CREATE TABLE activity_logs (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 12. Tabel berita & pengumuman kelurahan
-CREATE TABLE IF NOT EXISTS berita (
+-- 13. Tabel berita & pengumuman kelurahan
+CREATE TABLE berita (
   id SERIAL PRIMARY KEY,
   judul VARCHAR(255) NOT NULL,
   isi TEXT NOT NULL,
@@ -201,8 +209,8 @@ CREATE TABLE IF NOT EXISTS berita (
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 13. Tabel direktori UMKM lokal
-CREATE TABLE IF NOT EXISTS umkm (
+-- 14. Tabel direktori UMKM lokal
+CREATE TABLE umkm (
   id SERIAL PRIMARY KEY,
   nama VARCHAR(150) NOT NULL,
   jenis VARCHAR(80),
@@ -213,8 +221,8 @@ CREATE TABLE IF NOT EXISTS umkm (
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 14. Tabel galeri kegiatan warga & kelurahan
-CREATE TABLE IF NOT EXISTS galeri_kegiatan (
+-- 15. Tabel galeri kegiatan warga & kelurahan
+CREATE TABLE galeri_kegiatan (
   id SERIAL PRIMARY KEY,
   judul VARCHAR(200) NOT NULL,
   deskripsi TEXT,
@@ -225,17 +233,59 @@ CREATE TABLE IF NOT EXISTS galeri_kegiatan (
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 15. Tabel transparansi anggaran kelurahan
-CREATE TABLE IF NOT EXISTS anggaran (
+-- 16. Tabel transparansi anggaran kelurahan
+CREATE TABLE anggaran (
   id SERIAL PRIMARY KEY,
   tahun INT NOT NULL,
   program VARCHAR(255) NOT NULL,
   pagu NUMERIC(15,2) DEFAULT 0,
   realisasi NUMERIC(15,2) DEFAULT 0,
-  sumber VARCHAR(100) DEFAULT 'APBD',
+  sumber VARCHAR(100) DEFAULT 'APBD Kota Medan',
   keterangan TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Tabel surat masuk (agenda dinas kelurahan)
+CREATE TABLE surat_masuk (
+  id SERIAL PRIMARY KEY,
+  nomor_surat VARCHAR(100) NOT NULL,
+  pengirim VARCHAR(150) NOT NULL,
+  tanggal_surat DATE NOT NULL,
+  perihal VARCHAR(255) NOT NULL,
+  ringkasan_isi TEXT,
+  file_lampiran VARCHAR(255),
+  dicatat_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(30) DEFAULT 'menunggu_disposisi',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. Tabel lembar disposisi lurah
+CREATE TABLE disposisi (
+  id SERIAL PRIMARY KEY,
+  surat_masuk_id INT NOT NULL REFERENCES surat_masuk(id) ON DELETE CASCADE,
+  diberikan_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  tujuan_disposisi VARCHAR(100) NOT NULL,
+  sifat VARCHAR(30) DEFAULT 'biasa',
+  arahan TEXT NOT NULL,
+  catatan TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. Tabel surat keluar (surat dinas kelurahan)
+CREATE TABLE surat_keluar (
+  id SERIAL PRIMARY KEY,
+  surat_masuk_id INT REFERENCES surat_masuk(id) ON DELETE SET NULL,
+  nomor_surat VARCHAR(100) NOT NULL,
+  tujuan VARCHAR(150) NOT NULL,
+  perihal VARCHAR(255) NOT NULL,
+  isi_surat TEXT NOT NULL,
+  tanggal_surat DATE DEFAULT CURRENT_DATE,
+  file_path VARCHAR(255),
+  petugas_id INT REFERENCES users(id) ON DELETE SET NULL,
+  ditandatangani_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(30) DEFAULT 'draft',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indeks untuk performa query
@@ -249,3 +299,6 @@ CREATE INDEX IF NOT EXISTS idx_pengajuan_user ON pengajuan(user_id);
 CREATE INDEX IF NOT EXISTS idx_pengajuan_status ON pengajuan(status);
 CREATE INDEX IF NOT EXISTS idx_notifikasi_user ON notifikasi(user_id);
 CREATE INDEX IF NOT EXISTS idx_surat_kode_verifikasi ON surat(kode_verifikasi);
+CREATE INDEX IF NOT EXISTS idx_berita_tanggal ON berita(tanggal);
+CREATE INDEX IF NOT EXISTS idx_surat_masuk_nomor ON surat_masuk(nomor_surat);
+CREATE INDEX IF NOT EXISTS idx_surat_keluar_nomor ON surat_keluar(nomor_surat);

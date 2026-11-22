@@ -367,12 +367,12 @@ export default function ProfilDesa({ userRole }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <InputField label="Provinsi" hint="Contoh: Jawa Barat">
+              <InputField label="Provinsi" hint="Contoh: Sumatera Utara">
                 <input
                   type="text"
                   className="inp"
                   disabled={!bisaEdit}
-                  placeholder="Jawa Barat"
+                  placeholder="Sumatera Utara"
                   value={f?.provinsi || ''}
                   onChange={ch('provinsi')}
                 />

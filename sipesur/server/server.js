@@ -39,13 +39,19 @@ const maskId = (str) => {
   return str.slice(0, 6) + '******' + str.slice(12);
 };
 
-const log = (req, aksi, detail = '') =>
-  q('INSERT INTO activity_logs(user_id,aksi,detail,ip) VALUES(?,?,?,?)', [
-    req.user?.id || null,
-    aksi,
-    String(detail).slice(0, 250),
-    req.ip,
-  ]);
+const log = async (req, aksi, detail = '', customUserId = undefined) => {
+  try {
+    const uid = customUserId !== undefined ? customUserId : (req.user?.id || null);
+    await q('INSERT INTO activity_logs(user_id,aksi,detail,ip) VALUES(?,?,?,?)', [
+      uid,
+      aksi,
+      String(detail).slice(0, 250),
+      req.ip,
+    ]);
+  } catch (err) {
+    console.warn('Gagal mencatat activity log (diabaikan agar proses utama tidak terganggu):', err?.message || err);
+  }
+};
 
 const notif = (uid, pesan) =>
   q('INSERT INTO notifikasi(user_id,pesan) VALUES(?,?)', [uid, pesan]);
@@ -474,6 +480,89 @@ app.put(
     res.json({ message: 'Profil berhasil disimpan.' });
   })
 );
+
+/**
+ * Hapus Akun Sendiri Secara Mandiri (Self-Service Account Deletion)
+ * Endpoint: DELETE /api/profil dan DELETE /api/users/me
+ * Menghapus seluruh data pribadi, kependudukan, pengajuan, dokumen, dan notifikasi pemilik akun.
+ */
+const handleHapusAkunSendiri = async (req, res) => {
+  const userId = req.user.id;
+  const { password } = req.body || {};
+
+  if (!password || !password.trim()) {
+    throw fail(400, 'Silakan masukkan kata sandi Anda untuk mengonfirmasi penghapusan akun.');
+  }
+
+  const [u] = await q('SELECT id, nama, username, email, role, password FROM users WHERE id=?', [userId]);
+  if (!u) throw fail(404, 'Data akun pengguna tidak ditemukan.');
+
+  const match = await bcrypt.compare(password.trim(), u.password);
+  if (!match) {
+    throw fail(400, 'Kata sandi salah. Demi keamanan, penghapusan akun dibatalkan.');
+  }
+
+  // Jika admin, pastikan bukan satu-satunya admin aktif agar sistem tidak terkunci
+  if (u.role === 'admin') {
+    const otherAdmins = await q("SELECT id FROM users WHERE role='admin' AND aktif=1 AND id != ?", [userId]);
+    if (!otherAdmins.length) {
+      throw fail(400, 'Tidak dapat menghapus akun: Anda adalah satu-satunya Administrator aktif pada sistem.');
+    }
+  }
+
+  // 1. Catat audit log penghapusan akun mandiri secara permanen
+  // Gunakan user_id = null agar integritas foreign key di database tetap terjaga setelah akun dihapus
+  await log(req, 'HAPUS_AKUN_SENDIRI', `User ID: ${userId}, Nama: ${u.nama || u.username}, Role: ${u.role}`, null);
+
+  // 2. Ambil semua pengajuan milik user dan bersihkan berkas fisik serta relasinya
+  const pengajuanList = await q('SELECT id FROM pengajuan WHERE user_id=?', [userId]);
+  for (const p of pengajuanList) {
+    // Bersihkan berkas fisik surat jika ada
+    const surats = await q('SELECT file_path FROM surat WHERE pengajuan_id=?', [p.id]);
+    for (const s of surats) {
+      if (s.file_path && fs.existsSync(s.file_path)) {
+        try { fs.unlinkSync(s.file_path); } catch (_) {}
+      }
+    }
+    // Bersihkan berkas fisik dokumen persyaratan jika ada
+    const doks = await q('SELECT file_path FROM dokumen WHERE pengajuan_id=?', [p.id]);
+    for (const d of doks) {
+      if (d.file_path && fs.existsSync(d.file_path)) {
+        try { fs.unlinkSync(d.file_path); } catch (_) {}
+      }
+    }
+
+    await q('DELETE FROM surat WHERE pengajuan_id=?', [p.id]);
+    await q('DELETE FROM persetujuan WHERE pengajuan_id=?', [p.id]);
+    await q('DELETE FROM verifikasi WHERE pengajuan_id=?', [p.id]);
+    await q('DELETE FROM dokumen WHERE pengajuan_id=?', [p.id]);
+  }
+  await q('DELETE FROM pengajuan WHERE user_id=?', [userId]);
+
+  // 3. Hapus data kependudukan (warga) dan notifikasi
+  await q('DELETE FROM warga WHERE user_id=?', [userId]);
+  await q('DELETE FROM notifikasi WHERE user_id=?', [userId]);
+
+  // 4. Set NULL referensi di log aktivitas, artikel berita, dan berkas dinas jika ada
+  try {
+    await q('UPDATE activity_logs SET user_id=NULL WHERE user_id=?', [userId]);
+    await q('UPDATE berita SET penulis_id=NULL WHERE penulis_id=?', [userId]);
+    await q('UPDATE galeri_kegiatan SET penulis_id=NULL WHERE penulis_id=?', [userId]);
+    await q('UPDATE users SET diverifikasi_oleh=NULL WHERE diverifikasi_oleh=?', [userId]);
+    await q('UPDATE surat_masuk SET dicatat_oleh=NULL WHERE dicatat_oleh=?', [userId]);
+    await q('UPDATE disposisi SET diberikan_oleh=NULL WHERE diberikan_oleh=?', [userId]);
+    await q('UPDATE surat_keluar SET petugas_id=NULL WHERE petugas_id=?', [userId]);
+    await q('UPDATE surat_keluar SET ditandatangani_oleh=NULL WHERE ditandatangani_oleh=?', [userId]);
+  } catch (_) {}
+
+  // 5. Hapus akun user secara permanen
+  await q('DELETE FROM users WHERE id=?', [userId]);
+
+  res.json({ message: 'Akun Anda telah berhasil dihapus secara permanen dari sistem SIPESUR.' });
+};
+
+app.delete('/api/profil', auth, ah(handleHapusAkunSendiri));
+app.delete('/api/users/me', auth, ah(handleHapusAkunSendiri));
 
 /* ====================================================================
    PROFIL DESA & KOP SURAT DINAMIS (ADMIN, PETUGAS, LURAH)
@@ -990,11 +1079,49 @@ app.delete(
     if (id === req.user.id) throw fail(400, 'Tidak dapat menghapus akun sendiri');
     const [u] = await q('SELECT id, role FROM users WHERE id=?', [id]);
     if (!u) throw fail(404, 'Pengguna tidak ditemukan');
-    // Hapus data terkait warga jika ada
+    // 1. Bersihkan berkas fisik dan riwayat pengajuan surat jika ada
+    const pengajuanList = await q('SELECT id FROM pengajuan WHERE user_id=?', [id]);
+    for (const p of pengajuanList) {
+      const surats = await q('SELECT file_path FROM surat WHERE pengajuan_id=?', [p.id]);
+      for (const s of surats) {
+        if (s.file_path && fs.existsSync(s.file_path)) {
+          try { fs.unlinkSync(s.file_path); } catch (_) {}
+        }
+      }
+      const doks = await q('SELECT file_path FROM dokumen WHERE pengajuan_id=?', [p.id]);
+      for (const d of doks) {
+        if (d.file_path && fs.existsSync(d.file_path)) {
+          try { fs.unlinkSync(d.file_path); } catch (_) {}
+        }
+      }
+      await q('DELETE FROM surat WHERE pengajuan_id=?', [p.id]);
+      await q('DELETE FROM persetujuan WHERE pengajuan_id=?', [p.id]);
+      await q('DELETE FROM verifikasi WHERE pengajuan_id=?', [p.id]);
+      await q('DELETE FROM dokumen WHERE pengajuan_id=?', [p.id]);
+    }
+    await q('DELETE FROM pengajuan WHERE user_id=?', [id]);
+
+    // 2. Hapus data kependudukan (warga) dan notifikasi
     await q('DELETE FROM warga WHERE user_id=?', [id]);
     await q('DELETE FROM notifikasi WHERE user_id=?', [id]);
+
+    // 3. Set NULL referensi di tabel lain jika ada
+    try {
+      await q('UPDATE activity_logs SET user_id=NULL WHERE user_id=?', [id]);
+      await q('UPDATE berita SET penulis_id=NULL WHERE penulis_id=?', [id]);
+      await q('UPDATE galeri_kegiatan SET penulis_id=NULL WHERE penulis_id=?', [id]);
+      await q('UPDATE users SET diverifikasi_oleh=NULL WHERE diverifikasi_oleh=?', [id]);
+      await q('UPDATE surat_masuk SET dicatat_oleh=NULL WHERE dicatat_oleh=?', [id]);
+      await q('UPDATE disposisi SET diberikan_oleh=NULL WHERE diberikan_oleh=?', [id]);
+      await q('UPDATE surat_keluar SET petugas_id=NULL WHERE petugas_id=?', [id]);
+      await q('UPDATE surat_keluar SET ditandatangani_oleh=NULL WHERE ditandatangani_oleh=?', [id]);
+    } catch (_) {}
+
+    // 4. Catat log audit sebelum eksekusi delete user
+    await log(req, 'HAPUS_USER', `ID: ${id}, Role: ${u.role}`);
+
+    // 5. Hapus akun pengguna
     await q('DELETE FROM users WHERE id=?', [id]);
-    await log(req, 'HAPUS_USER', `ID: ${id}`);
     res.json({ message: 'Akun pengguna berhasil dihapus dari sistem.' });
   })
 );

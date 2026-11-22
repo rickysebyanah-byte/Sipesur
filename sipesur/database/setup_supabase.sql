@@ -1,12 +1,16 @@
 -- ====================================================================
 -- SIPESUR - Setup Lengkap Supabase (Schema + Seed + RLS off + RPC)
+-- Kelurahan Suka Maju, Kecamatan Medan Johor, Kota Medan
 -- Jalankan seluruh file ini di:
 --   Dashboard Supabase > SQL Editor > New Query > Paste > Run All
 -- ====================================================================
 
 -- ================================================================
--- 1. SCHEMA
+-- 1. SCHEMA BERSIH (Urutan Drop Sesuai Relasi Foreign Key)
 -- ================================================================
+DROP TABLE IF EXISTS surat_keluar CASCADE;
+DROP TABLE IF EXISTS disposisi CASCADE;
+DROP TABLE IF EXISTS surat_masuk CASCADE;
 DROP TABLE IF EXISTS activity_logs CASCADE;
 DROP TABLE IF EXISTS notifikasi CASCADE;
 DROP TABLE IF EXISTS surat CASCADE;
@@ -17,8 +21,14 @@ DROP TABLE IF EXISTS pengajuan CASCADE;
 DROP TABLE IF EXISTS persyaratan CASCADE;
 DROP TABLE IF EXISTS jenis_surat CASCADE;
 DROP TABLE IF EXISTS warga CASCADE;
+DROP TABLE IF EXISTS profil_desa CASCADE;
+DROP TABLE IF EXISTS berita CASCADE;
+DROP TABLE IF EXISTS umkm CASCADE;
+DROP TABLE IF EXISTS galeri_kegiatan CASCADE;
+DROP TABLE IF EXISTS anggaran CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
+-- 1. Tabel users (Akun Warga, Petugas, Lurah, Admin)
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
   nama VARCHAR(100) NOT NULL,
@@ -41,6 +51,7 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 2. Tabel profil kependudukan warga
 CREATE TABLE warga (
   id SERIAL PRIMARY KEY,
   user_id INT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -54,6 +65,7 @@ CREATE TABLE warga (
   telepon VARCHAR(20)
 );
 
+-- 3. Tabel jenis surat kelurahan
 CREATE TABLE jenis_surat (
   id SERIAL PRIMARY KEY,
   kode VARCHAR(10) UNIQUE NOT NULL,
@@ -63,16 +75,18 @@ CREATE TABLE jenis_surat (
   aktif SMALLINT NOT NULL DEFAULT 1
 );
 
+-- 4. Tabel dokumen persyaratan per jenis surat
 CREATE TABLE persyaratan (
   id SERIAL PRIMARY KEY,
   jenis_surat_id INT NOT NULL REFERENCES jenis_surat(id) ON DELETE CASCADE,
   nama VARCHAR(100) NOT NULL
 );
 
+-- 5. Tabel pengajuan surat oleh warga
 CREATE TABLE pengajuan (
   id SERIAL PRIMARY KEY,
   kode VARCHAR(20) UNIQUE NOT NULL,
-  user_id INT NOT NULL REFERENCES users(id),
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   jenis_surat_id INT NOT NULL REFERENCES jenis_surat(id),
   data_form JSONB NOT NULL DEFAULT '{}'::jsonb,
   status VARCHAR(30) NOT NULL DEFAULT 'submitted'
@@ -93,6 +107,7 @@ CREATE TRIGGER trg_pengajuan_updated_at
   BEFORE UPDATE ON pengajuan
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- 6. Tabel dokumen berkas lampiran persyaratan
 CREATE TABLE dokumen (
   id SERIAL PRIMARY KEY,
   pengajuan_id INT NOT NULL REFERENCES pengajuan(id) ON DELETE CASCADE,
@@ -103,6 +118,7 @@ CREATE TABLE dokumen (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 7. Tabel riwayat verifikasi petugas
 CREATE TABLE verifikasi (
   id SERIAL PRIMARY KEY,
   pengajuan_id INT NOT NULL REFERENCES pengajuan(id) ON DELETE CASCADE,
@@ -112,6 +128,7 @@ CREATE TABLE verifikasi (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 8. Tabel riwayat persetujuan lurah
 CREATE TABLE persetujuan (
   id SERIAL PRIMARY KEY,
   pengajuan_id INT NOT NULL REFERENCES pengajuan(id) ON DELETE CASCADE,
@@ -122,6 +139,7 @@ CREATE TABLE persetujuan (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 9. Tabel surat resmi yang diterbitkan
 CREATE TABLE surat (
   id SERIAL PRIMARY KEY,
   pengajuan_id INT UNIQUE NOT NULL REFERENCES pengajuan(id),
@@ -136,7 +154,8 @@ CREATE TABLE surat (
   terbit_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS profil_desa (
+-- 10. Tabel profil desa & kop surat dinamis
+CREATE TABLE profil_desa (
   id SERIAL PRIMARY KEY,
   nama_desa VARCHAR(100) NOT NULL DEFAULT 'Kelurahan Suka Maju',
   kecamatan VARCHAR(100) NOT NULL DEFAULT 'Kecamatan Medan Johor',
@@ -154,6 +173,7 @@ CREATE TABLE IF NOT EXISTS profil_desa (
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 11. Tabel notifikasi
 CREATE TABLE notifikasi (
   id SERIAL PRIMARY KEY,
   user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -162,6 +182,7 @@ CREATE TABLE notifikasi (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 12. Tabel log aktivitas audit sistem
 CREATE TABLE activity_logs (
   id SERIAL PRIMARY KEY,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
@@ -171,6 +192,98 @@ CREATE TABLE activity_logs (
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 13. Tabel berita & pengumuman kelurahan
+CREATE TABLE berita (
+  id SERIAL PRIMARY KEY,
+  judul VARCHAR(255) NOT NULL,
+  isi TEXT NOT NULL,
+  kategori VARCHAR(50) DEFAULT 'Pengumuman',
+  tanggal DATE DEFAULT CURRENT_DATE,
+  penulis_id INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Tabel direktori UMKM lokal
+CREATE TABLE umkm (
+  id SERIAL PRIMARY KEY,
+  nama VARCHAR(150) NOT NULL,
+  jenis VARCHAR(80),
+  alamat TEXT,
+  telepon VARCHAR(50),
+  deskripsi TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Tabel galeri kegiatan kelurahan & warga
+CREATE TABLE galeri_kegiatan (
+  id SERIAL PRIMARY KEY,
+  judul VARCHAR(200) NOT NULL,
+  deskripsi TEXT,
+  url_foto TEXT NOT NULL,
+  tanggal DATE DEFAULT CURRENT_DATE,
+  penulis_id INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Tabel transparansi anggaran kelurahan
+CREATE TABLE anggaran (
+  id SERIAL PRIMARY KEY,
+  tahun INT NOT NULL,
+  program VARCHAR(255) NOT NULL,
+  pagu NUMERIC(15,2) DEFAULT 0,
+  realisasi NUMERIC(15,2) DEFAULT 0,
+  sumber VARCHAR(100) DEFAULT 'APBD Kota Medan',
+  keterangan TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 17. Tabel surat masuk (agenda dinas)
+CREATE TABLE surat_masuk (
+  id SERIAL PRIMARY KEY,
+  nomor_surat VARCHAR(100) NOT NULL,
+  pengirim VARCHAR(150) NOT NULL,
+  tanggal_surat DATE NOT NULL,
+  perihal VARCHAR(255) NOT NULL,
+  ringkasan_isi TEXT,
+  file_lampiran VARCHAR(255),
+  dicatat_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(30) DEFAULT 'menunggu_disposisi',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 18. Tabel lembar disposisi lurah
+CREATE TABLE disposisi (
+  id SERIAL PRIMARY KEY,
+  surat_masuk_id INT NOT NULL REFERENCES surat_masuk(id) ON DELETE CASCADE,
+  diberikan_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  tujuan_disposisi VARCHAR(100) NOT NULL,
+  sifat VARCHAR(30) DEFAULT 'biasa',
+  arahan TEXT NOT NULL,
+  catatan TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. Tabel surat keluar (surat dinas kelurahan)
+CREATE TABLE surat_keluar (
+  id SERIAL PRIMARY KEY,
+  surat_masuk_id INT REFERENCES surat_masuk(id) ON DELETE SET NULL,
+  nomor_surat VARCHAR(100) NOT NULL,
+  tujuan VARCHAR(150) NOT NULL,
+  perihal VARCHAR(255) NOT NULL,
+  isi_surat TEXT NOT NULL,
+  tanggal_surat DATE DEFAULT CURRENT_DATE,
+  file_path VARCHAR(255),
+  petugas_id INT REFERENCES users(id) ON DELETE SET NULL,
+  ditandatangani_oleh INT REFERENCES users(id) ON DELETE SET NULL,
+  status VARCHAR(30) DEFAULT 'draft',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indeks performa
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_nip ON users(nip);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
@@ -181,9 +294,12 @@ CREATE INDEX IF NOT EXISTS idx_pengajuan_user ON pengajuan(user_id);
 CREATE INDEX IF NOT EXISTS idx_pengajuan_status ON pengajuan(status);
 CREATE INDEX IF NOT EXISTS idx_notifikasi_user ON notifikasi(user_id);
 CREATE INDEX IF NOT EXISTS idx_surat_kode ON surat(kode_verifikasi);
+CREATE INDEX IF NOT EXISTS idx_berita_tanggal ON berita(tanggal);
+CREATE INDEX IF NOT EXISTS idx_surat_masuk_nomor ON surat_masuk(nomor_surat);
+CREATE INDEX IF NOT EXISTS idx_surat_keluar_nomor ON surat_keluar(nomor_surat);
 
 -- ================================================================
--- 2. NONAKTIFKAN ROW LEVEL SECURITY (agar backend bisa akses via REST)
+-- 2. NONAKTIFKAN ROW LEVEL SECURITY (Untuk Backend Node.js REST API)
 -- ================================================================
 ALTER TABLE users          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE warga          DISABLE ROW LEVEL SECURITY;
@@ -197,10 +313,17 @@ ALTER TABLE surat          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE profil_desa    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifikasi     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE berita         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE umkm           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE galeri_kegiatan DISABLE ROW LEVEL SECURITY;
+ALTER TABLE anggaran       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE surat_masuk    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE disposisi      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE surat_keluar   DISABLE ROW LEVEL SECURITY;
 
 -- ================================================================
--- 3. FUNGSI RPC: Eksekusi SQL Arbitrary via REST API
---    Digunakan oleh backend Node.js sebagai pengganti koneksi pg langsung
+-- 3. FUNGSI RPC SUPABASE: Eksekusi SQL Aman via REST API
+--    (Mendukung hingga 25 parameter secara dinamis)
 -- ================================================================
 CREATE OR REPLACE FUNCTION sipesur_exec(query text, params jsonb DEFAULT '[]'::jsonb)
 RETURNS jsonb
@@ -213,24 +336,30 @@ DECLARE
   i int;
   n int;
 BEGIN
-  -- Konversi params jsonb array → text array untuk EXECUTE
   n := jsonb_array_length(params);
   param_array := ARRAY[]::text[];
-  FOR i IN 0..n-1 LOOP
-    IF jsonb_typeof(params->i) = 'null' THEN
-      param_array := array_append(param_array, NULL);
+  FOR i IN 0..24 LOOP
+    IF i < n THEN
+      IF jsonb_typeof(params->i) = 'null' THEN
+        param_array := array_append(param_array, NULL);
+      ELSE
+        param_array := array_append(param_array, (params->>i)::text);
+      END IF;
     ELSE
-      param_array := array_append(param_array, (params->>i)::text);
+      param_array := array_append(param_array, NULL);
     END IF;
   END LOOP;
 
-  -- Jalankan query dan kembalikan hasil sebagai JSON
   BEGIN
     EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || query || ') t'
     INTO result
     USING param_array[1], param_array[2], param_array[3], param_array[4],
           param_array[5], param_array[6], param_array[7], param_array[8],
-          param_array[9], param_array[10], param_array[11], param_array[12];
+          param_array[9], param_array[10], param_array[11], param_array[12],
+          param_array[13], param_array[14], param_array[15], param_array[16],
+          param_array[17], param_array[18], param_array[19], param_array[20],
+          param_array[21], param_array[22], param_array[23], param_array[24],
+          param_array[25];
   EXCEPTION WHEN OTHERS THEN
     RAISE EXCEPTION 'SQL Error: % | Query: %', SQLERRM, left(query, 200);
   END;
@@ -239,7 +368,6 @@ BEGIN
 END;
 $$;
 
--- Fungsi khusus untuk INSERT yang butuh RETURNING id
 CREATE OR REPLACE FUNCTION sipesur_insert(query text, params jsonb DEFAULT '[]'::jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -254,15 +382,18 @@ DECLARE
 BEGIN
   n := jsonb_array_length(params);
   param_array := ARRAY[]::text[];
-  FOR i IN 0..n-1 LOOP
-    IF jsonb_typeof(params->i) = 'null' THEN
-      param_array := array_append(param_array, NULL);
+  FOR i IN 0..24 LOOP
+    IF i < n THEN
+      IF jsonb_typeof(params->i) = 'null' THEN
+        param_array := array_append(param_array, NULL);
+      ELSE
+        param_array := array_append(param_array, (params->>i)::text);
+      END IF;
     ELSE
-      param_array := array_append(param_array, (params->>i)::text);
+      param_array := array_append(param_array, NULL);
     END IF;
   END LOOP;
 
-  -- Tambah RETURNING id jika belum ada
   insert_query := query;
   IF position('RETURNING' IN upper(query)) = 0 THEN
     insert_query := query || ' RETURNING id';
@@ -273,7 +404,11 @@ BEGIN
     INTO result
     USING param_array[1], param_array[2], param_array[3], param_array[4],
           param_array[5], param_array[6], param_array[7], param_array[8],
-          param_array[9], param_array[10], param_array[11], param_array[12];
+          param_array[9], param_array[10], param_array[11], param_array[12],
+          param_array[13], param_array[14], param_array[15], param_array[16],
+          param_array[17], param_array[18], param_array[19], param_array[20],
+          param_array[21], param_array[22], param_array[23], param_array[24],
+          param_array[25];
   EXCEPTION WHEN OTHERS THEN
     RAISE EXCEPTION 'SQL Error: % | Query: %', SQLERRM, left(query, 200);
   END;
@@ -282,7 +417,6 @@ BEGIN
 END;
 $$;
 
--- Fungsi untuk UPDATE/DELETE (kembalikan rowcount)
 CREATE OR REPLACE FUNCTION sipesur_mutate(query text, params jsonb DEFAULT '[]'::jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -296,11 +430,15 @@ DECLARE
 BEGIN
   n := jsonb_array_length(params);
   param_array := ARRAY[]::text[];
-  FOR i IN 0..n-1 LOOP
-    IF jsonb_typeof(params->i) = 'null' THEN
-      param_array := array_append(param_array, NULL);
+  FOR i IN 0..24 LOOP
+    IF i < n THEN
+      IF jsonb_typeof(params->i) = 'null' THEN
+        param_array := array_append(param_array, NULL);
+      ELSE
+        param_array := array_append(param_array, (params->>i)::text);
+      END IF;
     ELSE
-      param_array := array_append(param_array, (params->>i)::text);
+      param_array := array_append(param_array, NULL);
     END IF;
   END LOOP;
 
@@ -308,7 +446,11 @@ BEGIN
     EXECUTE query
     USING param_array[1], param_array[2], param_array[3], param_array[4],
           param_array[5], param_array[6], param_array[7], param_array[8],
-          param_array[9], param_array[10], param_array[11], param_array[12];
+          param_array[9], param_array[10], param_array[11], param_array[12],
+          param_array[13], param_array[14], param_array[15], param_array[16],
+          param_array[17], param_array[18], param_array[19], param_array[20],
+          param_array[21], param_array[22], param_array[23], param_array[24],
+          param_array[25];
     GET DIAGNOSTICS rc = ROW_COUNT;
   EXCEPTION WHEN OTHERS THEN
     RAISE EXCEPTION 'SQL Error: % | Query: %', SQLERRM, left(query, 200);
@@ -318,13 +460,13 @@ BEGIN
 END;
 $$;
 
--- Grant eksekusi ke anon dan authenticated role
-GRANT EXECUTE ON FUNCTION sipesur_exec(text, jsonb) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION sipesur_insert(text, jsonb) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION sipesur_mutate(text, jsonb) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION sipesur_exec(text, jsonb) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION sipesur_insert(text, jsonb) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION sipesur_mutate(text, jsonb) TO anon, authenticated, service_role;
 
 -- ================================================================
--- 4. SEED DATA (password semua akun: Password123)
+-- 4. SEED DATA RESMI KELURAHAN SUKA MAJU
+--    (Password semua akun: Password123)
 -- ================================================================
 INSERT INTO users (nama,email,username,nip,jabatan,telepon,password,role,status_verifikasi,must_change_password,aktif) VALUES
 ('Admin Kelurahan','admin@sipesur.test','admin','198001012005011001','Administrator Sistem','081234567890',
@@ -340,14 +482,32 @@ INSERT INTO users (nama,email,username,nip,jabatan,telepon,password,role,status_
 
 INSERT INTO warga (user_id,nik,no_kk,tempat_lahir,tanggal_lahir,jenis_kelamin,alamat,pekerjaan,telepon)
 SELECT id,'3201010101900001','3201010101900002','Medan','1990-01-01','L',
-       'Jl. STM No. 5 RT 02/RW 03, Suka Maju, Medan Johor','Karyawan Swasta','081200000001'
+       'Jl. STM No. 15 RT 02/RW 03, Kelurahan Suka Maju, Medan Johor','Karyawan Swasta','081200000001'
 FROM users WHERE username='3201010101900001';
 
 INSERT INTO warga (user_id,nik,no_kk,tempat_lahir,tanggal_lahir,jenis_kelamin,alamat,pekerjaan,telepon)
 SELECT id,'3201010202950001','3201010202950002','Medan','1995-02-02','L',
-       'Jl. Sakti Lubis No. 12 RT 01/RW 04, Suka Maju, Medan Johor','Wiraswasta','081200000002'
+       'Jl. Sakti Lubis No. 12 RT 01/RW 04, Kelurahan Suka Maju, Medan Johor','Wiraswasta','081200000002'
 FROM users WHERE username='3201010202950001';
 
+-- Profil Desa & Kop Surat Resmi
+INSERT INTO profil_desa (id, nama_desa, kecamatan, kabupaten_kota, provinsi, alamat, kode_pos, telepon, email, website, nama_lurah, nip_lurah, jabatan_lurah)
+VALUES (1, 'Kelurahan Suka Maju', 'Kecamatan Medan Johor', 'Pemerintah Kota Medan', 'Sumatera Utara', 'Jl. STM No. 40, Kelurahan Suka Maju', '20146', '0823-4123-5734', 'kelurahan@pemkomedan.go.id', 'sukamaju.medan.go.id', 'Muhammad Iqbal Samosir, S.E., M.A.P.', '198506122010011005', 'Lurah Suka Maju')
+ON CONFLICT (id) DO UPDATE SET
+  nama_desa = EXCLUDED.nama_desa,
+  kecamatan = EXCLUDED.kecamatan,
+  kabupaten_kota = EXCLUDED.kabupaten_kota,
+  provinsi = EXCLUDED.provinsi,
+  alamat = EXCLUDED.alamat,
+  kode_pos = EXCLUDED.kode_pos,
+  telepon = EXCLUDED.telepon,
+  email = EXCLUDED.email,
+  website = EXCLUDED.website,
+  nama_lurah = EXCLUDED.nama_lurah,
+  nip_lurah = EXCLUDED.nip_lurah,
+  jabatan_lurah = EXCLUDED.jabatan_lurah;
+
+-- Jenis Surat & Persyaratan
 INSERT INTO jenis_surat (kode,nama,template,form_fields,aktif) VALUES
 ('SKD','Surat Keterangan Domisili','Orang tersebut benar berdomisili di wilayah Kelurahan Suka Maju.',
  '[{"name":"alamat_domisili","label":"Alamat Domisili"},{"name":"lama_tinggal","label":"Lama Tinggal"},{"name":"keperluan","label":"Keperluan"}]'::jsonb,1),
@@ -392,15 +552,35 @@ INSERT INTO persyaratan (jenis_surat_id,nama) VALUES
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'Kartu Keluarga'),
 ((SELECT id FROM jenis_surat WHERE kode='SPP'),'Pas Foto');
 
-INSERT INTO profil_desa (nama_desa, kecamatan, kabupaten_kota, provinsi, alamat, kode_pos, telepon, email, website, nama_lurah, nip_lurah, jabatan_lurah)
-VALUES ('Kelurahan Suka Maju', 'Kecamatan Medan Johor', 'Pemerintah Kota Medan', 'Sumatera Utara', 'Jl. STM No. 40, Kelurahan Suka Maju', '20146', '0823-4123-5734', 'kelurahan@pemkomedan.go.id', 'sukamaju.medan.go.id', 'Muhammad Iqbal Samosir, S.E., M.A.P.', '198506122010011005', 'Lurah Suka Maju')
-ON CONFLICT (id) DO NOTHING;
+-- Berita & Pengumuman Resmi
+INSERT INTO berita (judul, isi, kategori, tanggal) VALUES
+('Pawai Ta’aruf MTQ ke-59 Tingkat Kota Medan',
+ 'Lurah Tanjung Sari didampingi jajaran kelurahan turut ambil bagian dalam kemeriahan Pawai Ta’aruf MTQ ke-59 tingkat Kota Medan. Semangat MTQ bukan hanya tentang kompetisi, tetapi juga mempererat ukhuwah, memperkuat nilai keislaman, dan merajut persatuan dalam keberagaman.',
+ 'Berita', CURRENT_DATE),
+('Jadwal Pelayanan Administrasi Kelurahan Suka Maju',
+ 'Diberitahukan kepada seluruh warga Kelurahan Suka Maju bahwa pelayanan administrasi surat-menyurat di kantor kelurahan dibuka setiap hari Senin hingga Jumat pukul 08.00 - 15.30 WIB. Permohonan surat online melalui SIPESUR dapat diajukan 24 jam.',
+ 'Pengumuman', CURRENT_DATE);
+
+-- UMKM Warga
+INSERT INTO umkm (nama, jenis, alamat, telepon, deskripsi) VALUES
+('Kopi Suka Maju', 'Kuliner / Minuman', 'Jl. STM No. 42, Medan Johor', '081234567890', 'Kedai kopi khas nusantara dengan biji kopi pilihan Sumatera.'),
+('Kerajinan Anyaman Maju Bersama', 'Kerajinan Tangan', 'Jl. Sakti Lubis No. 8, Medan Johor', '081234567891', 'Produk kerajinan anyaman bambu dan rotan berkualitas ekspor.');
+
+-- Galeri Kegiatan
+INSERT INTO galeri_kegiatan (judul, deskripsi, url_foto, tanggal) VALUES
+('Gotong Royong Kebersihan Lingkungan', 'Kegiatan gotong royong warga membersihkan drainase dan fasilitas umum.', 'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800', CURRENT_DATE);
+
+-- Anggaran Transparansi
+INSERT INTO anggaran (tahun, program, pagu, realisasi, sumber, keterangan) VALUES
+(2026, 'Program Pelayanan Administrasi Kependudukan', 75000000.00, 48500000.00, 'APBD Kota Medan', 'Operasional digitalisasi pelayanan surat');
 
 -- ================================================================
--- 5. VERIFIKASI
+-- 5. VERIFIKASI AKHIR DATABASE
 -- ================================================================
-SELECT 'SIPESUR database siap!' AS status,
+SELECT 'SIPESUR database siap dan tersinkronisasi 100%!' AS status,
   (SELECT COUNT(*) FROM users)::int AS users,
   (SELECT COUNT(*) FROM warga)::int AS warga,
   (SELECT COUNT(*) FROM jenis_surat)::int AS jenis_surat,
-  (SELECT COUNT(*) FROM persyaratan)::int AS persyaratan;
+  (SELECT COUNT(*) FROM persyaratan)::int AS persyaratan,
+  (SELECT COUNT(*) FROM profil_desa)::int AS profil_desa,
+  (SELECT COUNT(*) FROM berita)::int AS berita;

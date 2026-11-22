@@ -477,7 +477,7 @@ function executeLocalSql(sql, params = []) {
   }
 
   // 3b. SELECT USERS
-  if (upper.includes('FROM USERS') && upper.includes('WHERE')) {
+  if (upper.startsWith('SELECT') && upper.includes('FROM USERS') && upper.includes('WHERE')) {
     let rows = [...dbData.users];
     if (upper.includes('EMAIL = ?') || upper.includes('USERNAME = ?') || upper.includes('NIP = ?')) {
       const id = String(params[0] || '').toLowerCase();
@@ -840,6 +840,14 @@ function executeLocalSql(sql, params = []) {
 
   if (tableName && dbData[tableName]) {
     if (upper.startsWith('SELECT')) {
+      if (upper.includes('WHERE') && params.length > 0) {
+        const whereMatch = cleanSql.match(/WHERE\s+([a-zA-Z0-9_\.]+)\s*=\s*\?/i);
+        if (whereMatch) {
+          const col = whereMatch[1].split('.').pop().toLowerCase();
+          const val = params[0];
+          return dbData[tableName].filter((row) => String(row[col] ?? '') === String(val ?? ''));
+        }
+      }
       return [...dbData[tableName]];
     }
     if (upper.startsWith('INSERT')) {

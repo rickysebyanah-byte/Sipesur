@@ -4074,12 +4074,17 @@ function Arsip() {
 }
 
 function Profil() {
+  const { logout } = useAuth();
   const [me] = useGet('/me');
   const [f, setF] = useState(null);
   const [m, setM] = useState();
   const [sig, setSig] = useState(null);
   const [sigMsg, setSigMsg] = useState(null);
   const [savingSig, setSavingSig] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => {
     if (me && me.nama && !f) setF({ ...me });
@@ -4123,6 +4128,22 @@ function Profil() {
       setSigMsg({ t: em(err) });
     } finally {
       setSavingSig(false);
+    }
+  };
+
+  const handleHapusAkunSendiri = async (e) => {
+    e.preventDefault();
+    if (!deletePassword) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.delete('/profil', { data: { password: deletePassword } });
+      alert('Akun Anda telah berhasil dihapus secara permanen dari sistem SIPESUR.');
+      logout();
+      window.location.href = '/';
+    } catch (err) {
+      setDeleteError(em(err));
+      setDeleting(false);
     }
   };
 
@@ -4221,6 +4242,100 @@ function Profil() {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* SECTION HAPUS AKUN SENDIRI (MANDIRI) */}
+      <Card
+        title="⚠️ Hapus Akun Saya"
+        subtitle="Kelola kepemilikan dan penghapusan akun Anda secara mandiri"
+      >
+        <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-rose-950">Penghapusan Akun Permanen</h4>
+              <p className="text-xs text-rose-800 leading-relaxed max-w-xl">
+                Setelah akun Anda dihapus, semua data profil kependudukan, seluruh riwayat pengajuan surat, berkas persyaratan, dan notifikasi Anda akan dihapus secara permanen dari basis data kelurahan. Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeleteModal(true);
+                setDeletePassword('');
+                setDeleteError(null);
+              }}
+              className="px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-sm transition whitespace-nowrap flex items-center gap-1.5"
+            >
+              🗑️ Hapus Akun Saya
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {/* MODAL KONFIRMASI HAPUS AKUN MANDIRI */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-rose-100">
+            <div className="flex items-center gap-3 text-rose-600 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-2xl font-bold">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900">Konfirmasi Hapus Akun</h3>
+                <p className="text-xs text-slate-500">Tindakan ini permanen & tidak dapat dibatalkan</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              Apakah Anda benar-benar yakin ingin menghapus akun <b>{f.nama}</b> ({f.username || f.email})? Seluruh data identitas kependudukan, permohonan surat, dan berkas Anda akan dimusnahkan dari server.
+            </p>
+
+            <form onSubmit={handleHapusAkunSendiri} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Masukkan Kata Sandi Anda untuk Konfirmasi:
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  placeholder="Kata sandi akun Anda saat ini"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="inp text-sm"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl font-medium">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeletePassword('');
+                    setDeleteError(null);
+                  }}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleting || !deletePassword}
+                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                >
+                  {deleting ? 'Menghapus Akun…' : 'Ya, Hapus Akun Permanen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
