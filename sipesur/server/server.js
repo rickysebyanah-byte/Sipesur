@@ -76,7 +76,8 @@ app.use(
     },
     credentials: true,
   }),
-  express.json({ limit: '100kb' }),
+  express.json({ limit: '200mb' }),
+  express.urlencoded({ limit: '200mb', extended: true }),
   rateLimit({ windowMs: 15 * 60 * 1000, limit: 600 })
 );
 
@@ -115,12 +116,20 @@ const upload = multer({
     },
     filename: (r, f, cb) => cb(null, crypto.randomUUID() + path.extname(f.originalname).toLowerCase()),
   }),
-  limits: { fileSize: 2 * 1024 * 1024, files: 12 },
-  fileFilter: (r, f, cb) =>
-    ['application/pdf', 'image/jpeg', 'image/png'].includes(f.mimetype) &&
-      /\.(pdf|jpe?g|png)$/i.test(f.originalname)
-      ? cb(null, true)
-      : cb(fail(400, 'File harus PDF/JPG/PNG maksimal 2 MB')),
+  limits: {
+    // Tanpa batasan ukuran berkas (bebas ukuran gambar & dokumen)
+    fileSize: Infinity,
+    fieldSize: Infinity,
+  },
+  fileFilter: (r, f, cb) => {
+    // Menerima semua format gambar (JPG, JPEG, PNG, WEBP, GIF, BMP, SVG, TIFF) serta dokumen PDF
+    const isImage = (f.mimetype && f.mimetype.startsWith('image/')) || /\.(jpe?g|png|webp|gif|bmp|svg|tiff?)$/i.test(f.originalname);
+    const isPdf = f.mimetype === 'application/pdf' || /\.pdf$/i.test(f.originalname);
+    if (isImage || isPdf) {
+      return cb(null, true);
+    }
+    return cb(fail(400, 'Format berkas tidak didukung. Harap unggah berkas Gambar atau PDF.'));
+  },
 });
 
 const getP = async (id, user) => {

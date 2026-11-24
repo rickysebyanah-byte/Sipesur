@@ -128,10 +128,6 @@ export default function ProfilDesa({ userRole }) {
       setMsg({ type: 'error', text: 'Logo harus berupa berkas PNG, JPG, atau WebP.' });
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setMsg({ type: 'error', text: 'Ukuran logo maksimal 2 MB.' });
-      return;
-    }
     const formData = new FormData();
     formData.append('logo', file);
     try {
@@ -444,7 +440,7 @@ export default function ProfilDesa({ userRole }) {
                       </div>
                     )}
                     <span className="text-[11px] text-slate-400 leading-tight">
-                      PNG/JPG transparan, min. 200×200px, maks. 2 MB.
+                      PNG/JPG/WebP transparan, min. 200×200px (tanpa batasan ukuran).
                     </span>
                   </div>
                 )}

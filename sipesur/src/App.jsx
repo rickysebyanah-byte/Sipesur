@@ -2287,7 +2287,7 @@ function Ajukan() {
 
             <div className="rounded-lg bg-slate-50 p-4 border">
               <h3 className="mb-2 text-xs font-bold text-navy">
-                Unggah Dokumen Persyaratan (PDF/JPG/PNG, maks. 2 MB)
+                Unggah Dokumen Persyaratan (PDF/JPG/PNG - Bebas Ukuran Berkas)
               </h3>
               <div className="space-y-2">
                 {persyaratan.map((p) => (
@@ -5645,10 +5645,6 @@ function GaleriKelurahan() {
   const handleUploadFoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setM({ t: 'Ukuran foto maksimal 4 MB.' });
-      return;
-    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       setF((prev) => ({ ...prev, url_foto: ev.target.result }));
